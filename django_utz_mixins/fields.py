@@ -6,13 +6,13 @@ from django.db import models
 from .mixins import UTZModelMixin, UTZUserModelMixin
 
 
-
 class UTZBaseField:
     """Base class for all UTZ fields"""
 
     _call_count = 0
 
-    def get_utz(self, instance: UTZModelMixin):
+
+    def get_utz(self, instance: UTZModelMixin | models.Model):
         """
         Return the user's timezone
         
@@ -25,8 +25,8 @@ class UTZBaseField:
         )
         user = instance
         if not instance.is_user_model:
-            user_field = instance._find_user_related_model_field()
-            user = getattr(instance, user_field)
+            user_field_traversal_path = instance._find_user_related_model_field()
+            user = instance._get_obj_from_traversal_path(user_field_traversal_path)
         assert issubclass(user.__class__, UTZUserModelMixin), (
             f'{self.__class__.__name__} requires the user model to inherit from '
             'UTZUserModelMixin'
@@ -45,7 +45,7 @@ class UTZBaseField:
     
 
     def to_internal_value(self, value):
-        server_timezone = pytz.timezone(settings.TIME_ZONE) if settings.USE_TZ else None
+        server_timezone = pytz.timezone(settings.TIME_ZONE) if settings.USE_TZ else "UTC"
         return super().to_internal_value(value).astimezone(server_timezone)
 
 
@@ -57,6 +57,8 @@ class UTZTimeField(UTZBaseField, serializers.TimeField):
     convert time fields to user's local timezone.
 
     It can also be used as a standalone field in a serializer without the `UTZModelSerializerMixin` mixin.
+
+    if settings.USE_TZ is False, server's timezone is assumed to be UTC
 
     #### Example:
     ```python
@@ -84,6 +86,8 @@ class UTZDateTimeField(UTZBaseField, serializers.DateTimeField):
     convert datetime fields to user's local timezone.
 
     It can also be used as a standalone field in a serializer without the `UTZModelSerializerMixin` mixin.
+
+    if settings.USE_TZ is False, server's timezone is assumed to be UTC
 
     #### Example:
     ```

@@ -1,4 +1,18 @@
+from django.core.exceptions import ImproperlyConfigured
 import pytz
+from django.core.exceptions import ValidationError
+
+
+def validate_timezone(value):
+    """
+    Validator to check if a timezone is valid.
+
+    :param value: Timezone value to validate
+    :raises: ValidationError if the value is not a valid timezone
+    """
+    if not is_timezone_valid(value):
+        raise ValidationError("Invalid timezone.")
+
 
 def is_timezone_valid(timezone_name: str):
     """
@@ -10,9 +24,9 @@ def is_timezone_valid(timezone_name: str):
     try:
         pytz.timezone(timezone_name)
         return True
-    except pytz.UnknownTimeZoneError:
+    except pytz.exceptions.UnknownTimeZoneError:
         return False
-    
+
 
 def final(method):
     """Decorator to mark a method as final. Not to be overridden."""

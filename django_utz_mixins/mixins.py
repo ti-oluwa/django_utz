@@ -1,12 +1,13 @@
-from django.core.exceptions import FieldError
+from django.core.exceptions import FieldError, ImproperlyConfigured, FieldDoesNotExist
 import types
 import pytz
 import datetime
 from django.db import models
+from django.conf import settings
 from django.contrib.auth.models import AbstractUser, AbstractBaseUser, User
 
 
-from .utils import is_timezone_valid, final
+from .utils import is_timezone_valid, final, validate_timezone
 
 
 user_models = (AbstractBaseUser, AbstractUser, User)
@@ -25,13 +26,13 @@ class UTZUserModelMixin:
     ```
     from django.db import models
     from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
-    from api.mixins import UTZUserModelMixin
+    from django_utz_mixins.mixins import UTZUserModelMixin
 
     class User(UTZUserModelMixin, AbstractBaseUser, PermissionsMixin):
         '''User model'''
         username = models.CharField(max_length=255, unique=True)
         email = models.EmailField(max_length=255, unique=True)
-        timezone = models.CharField(max_length=255, blank=True, null=True)
+        timezone = models.CharField(max_length=255, blank=True)
         is_staff = models.BooleanField(default=False)
         is_active = models.BooleanField(default=True)
         is_superuser = models.BooleanField(default=False)
@@ -54,7 +55,7 @@ class UTZUserModelMixin:
         obj = super().__init__(*args, **kwargs)
         self._model_pre_check()
         return obj
-    
+
 
     @property
     def _utz_(self):
@@ -64,7 +65,7 @@ class UTZUserModelMixin:
             raise FieldError(f"Field `{self.user_timezone_field}` does not exist in `{self.__class__.__name__}` model. Please add a `{self.user_timezone_field}` field in the model or set `user_timezone_field` attribute to the name of the field in `{self.__class__.__name__}` model which stores the user's timezone.")
         if utz and not is_timezone_valid(utz):  # If timezone is invalid
             raise ValueError("Invalid timezone.")
-        return utz
+        return utz or settings.TIME_ZONE or "UTC"
 
 
     @property
@@ -77,8 +78,21 @@ class UTZUserModelMixin:
         """Ensure that the model in which this mixin is used is the User model"""
         if not self.is_user_model:
             raise TypeError("This mixin can only be used with the User model.")
+        
+        # Add user_timezone_field to the model if not already added
+        if not hasattr(self, self.user_timezone_field):
+            raise ImproperlyConfigured(f"Field `{self.user_timezone_field}` does not exist in `{self.__class__.__name__}` model. Please add a `{self.user_timezone_field}` field in the model or set `user_timezone_field` attribute to the name of the field in `{self.__class__.__name__}` model which stores the user's timezone.")
+
+        # Add timezone validator to the user_timezone_field if not already added
+        try:
+            field = self._meta.get_field(self.user_timezone_field)
+            if field and validate_timezone not in field.validators:
+                field.validators.append(validate_timezone)
+        except FieldDoesNotExist:
+            pass
         return None 
     
+
     @final
     def to_local_timezone(self, time: datetime.datetime):
         """
@@ -96,7 +110,7 @@ class UTZUserModelMixin:
 
 class UTZModelMixin:
     """
-    #### Model Mixin to add properties which return the values of the fields in `self.time_related_fields` in the user's timezone.
+    ### Adds properties which return the values of the fields in `self.time_related_fields` in the user's timezone.
     #### This properties are created dynamically and added to the model in which this mixin is used. 
     The property names are the field names in `self.time_related_fields` with the suffix `self.utz_property_suffix` added to them.
 
@@ -112,6 +126,7 @@ class UTZModelMixin:
     ```
     # After `UTZUserModelMixin` has been added to the User model
     from django.contrib.auth import get_user_model
+    from django_utz_mixins.mixins import UTZModelMixin
 
     User = get_user_model()
 
@@ -158,8 +173,8 @@ class UTZModelMixin:
         assert issubclass(self._model_superclass, models.Model), (
             f"Invalid superclass for model {self.__class__.__name__}: {self._model_superclass}."
         )
-        if self._model_superclass not in self.__class__.__bases__: # Check that the class inherits `self._model_superclass`
-            raise NotImplementedError(f"Model {self.__class__.__name__} does not inherit from {self._model_superclass.__class__.__name__}.")
+        if not self.is_user_model and not issubclass(self.__class__, self._model_superclass): # Check that the class inherits `self._model_superclass`
+            raise ImproperlyConfigured(f"Model {self.__class__.__name__} does not inherit from {self._model_superclass.__name__}.")
 
         if not hasattr(self, "time_related_fields"):
             raise AttributeError(f"Model {self.__class__.__name__} does not have `time_related_fields` attribute.")
@@ -183,7 +198,7 @@ class UTZModelMixin:
 
     def _create_utz_method_for(self, time_related_field: str):
         """
-        Returns a method that would be convert to a propety for the given time related field. 
+        Returns a method that would be convert to a property for the given time related field. 
         This method returns the time related field's value in the user's timezone.
 
         :param time_related_field: The time related field for which the property is to be created.
@@ -196,10 +211,10 @@ class UTZModelMixin:
         utz_method = f"{time_related_field}_{self.utz_property_suffix}"
         user = self
         if not self.is_user_model: # If the model is not the User model or its subclass, find the user related model field
-            user_field = self._find_user_related_model_field()
-            if user_field is None:
-                raise FieldError(f"User related model field not found in {self.__class__.__name__}")
-            user = getattr(self, user_field) # Get the user instance from the user related model field
+            user_field_traversal_path = self._find_user_related_model_field()
+            if not user_field_traversal_path:
+                raise FieldError(f"No relation to the User model was found in {self.__class__.__name__}")
+            user = self._get_obj_from_traversal_path(user_field_traversal_path) # Get the user instance using its traversal path from this model
         self._check_user_model_has_utz_mixin(user)
 
         def utz_method(self):
@@ -207,46 +222,76 @@ class UTZModelMixin:
         
         return utz_method
     
+
+    def _get_obj_from_traversal_path(self, traversal_path: str):
+        """
+        Gets the object using its traversal path from the current model
+        
+        :param traversal_path: The traversal path to the object from the current model
+        """
+        field_names = traversal_path.split('.')
+        obj = self
+        for field_name in field_names:
+            obj = getattr(obj, field_name)
+        return obj
+        
+    
     @staticmethod
     def _check_user_model_has_utz_mixin(user_model: AbstractBaseUser | AbstractUser):
         """
         Checks if the user model has the `UTZUserModelMixin` mixin or its subclass.
+
+        :param user_model: The user model to check.
         """
         if not issubclass(user_model.__class__, UTZUserModelMixin):
-            raise NotImplementedError(f"{user_model.__class__.__name__} must inherit the `UTZUserModelMixin` mixin.")
+            raise ImproperlyConfigured(f"{user_model.__class__.__name__} must inherit the `UTZUserModelMixin` mixin.")
         return True
   
 
     def _find_user_related_model_field(self):
         """
-        Finds the user field in the model.
+        Finds the user field in the model or its related models.
 
-        :return: The user field name in the model or None if not found.
+        :return: The user field traversal path or None if not found.
         """
-        for field in self._meta.fields:
-            related_model = field.related_model
-            if related_model and issubclass(related_model, user_models):
-                return field.name
-        return None
+        field_paths = []
 
+        def find_user_related_field_path(model: models.Model):
+            """Finds and returns the user related field traversal path in the given model or its related models."""
+            for field in model._meta.fields:
+                related_model = field.related_model
+                if related_model:
+                    field_paths.append(field.name)
+                    if issubclass(related_model, user_models):
+                        return ".".join(field_paths)
+                    else:
+                        # if the field is a relational field but it is related_model is not the user model, 
+                        # check the related_model's fields for the user related field
+                        return find_user_related_field_path(model=related_model)  
+            field_paths.pop()
+                
+        return find_user_related_field_path(model=self)
+    
 
-    def is_datetime_field(self, time_related_field: str):
+    @classmethod
+    def is_datetime_field(cls, time_related_field: str):
         """
         Checks if the given field is a date time field in the model.
 
         :param time_related_field: The time related field to check.
         """
-        field = self._meta.get_field(time_related_field)
+        field = cls._meta.get_field(time_related_field)
         return isinstance(field, models.DateTimeField)
     
 
-    def is_time_field(self, time_related_field: str):
+    @classmethod
+    def is_time_field(cls, time_related_field: str):
         """
         Checks if the given field is a time field in the model.
 
         :param time_related_field: The time related field to check.
         """
-        field = self._meta.get_field(time_related_field)
+        field = cls._meta.get_field(time_related_field)
         return isinstance(field, models.TimeField)
 
 
