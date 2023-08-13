@@ -1,7 +1,7 @@
 """
-#### Django UTZ(User TimeZone) Mixins
+#### Django UTZ(User Timezone)
 
-This package contains mixins for Django models and DRF model serializers that helps you to easily convert time related fields to the user's timezone.
+This package contains mixins for Django models and DRF model serializers that helps you to easily convert timezone aware fields to the user's timezone.
 
 @Author: Daniel T. Afolayan (ti-oluwa.github.io)
 """
