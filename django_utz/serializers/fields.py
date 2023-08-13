@@ -3,7 +3,8 @@ from django.conf import settings
 import pytz
 from django.db import models
 
-from .mixins import UTZModelMixin, UTZUserModelMixin
+from ..models.mixins import UTZModelMixin, UTZUserModelMixin
+from ..utils import get_attr_by_traversal
 
 
 class UTZBaseField:
@@ -25,8 +26,8 @@ class UTZBaseField:
         )
         user = instance
         if not instance.is_user_model:
-            user_field_traversal_path = instance._find_user_related_model_field()
-            user = instance._get_obj_from_traversal_path(user_field_traversal_path)
+            user_field_traversal_path = instance.find_user_related_model_field()
+            user = get_attr_by_traversal(instance, user_field_traversal_path)
         assert issubclass(user.__class__, UTZUserModelMixin), (
             f'{self.__class__.__name__} requires the user model to inherit from '
             'UTZUserModelMixin'
@@ -37,10 +38,11 @@ class UTZBaseField:
 
     def to_representation(self, value):
         instance = self.root.instance
-        if issubclass(instance.__class__, models.QuerySet):
+        # If the instance is a queryset, get the current instance from the queryset
+        if issubclass(instance.__class__, (models.QuerySet, list)):
             instance = instance[self._call_count]
             self._call_count += 1
-        self.timezone = self.get_utz(instance=instance)
+        self.timezone = self.get_utz(instance=instance) # get the user timezone for the current instance
         return super().to_representation(value)
     
 

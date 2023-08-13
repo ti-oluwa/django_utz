@@ -1,8 +1,9 @@
 from typing import Dict
 from django.core.exceptions import ImproperlyConfigured
 
-from .mixins import UTZModelMixin
+from ..models.mixins import UTZModelMixin
 from .fields import UTZDateTimeField, UTZTimeField
+from ..utils import is_datetime_field, is_time_field
 
 
 
@@ -50,6 +51,7 @@ class UTZModelSerializerMixin:
     """
 
     utz_model_mixin = UTZModelMixin
+    add_utz_fields = True
     datetime_repr_format = "%Y-%m-%d %H:%M:%S %Z (%z)"
     time_repr_format = "%H:%M:%S %Z (%z)"
 
@@ -63,20 +65,10 @@ class UTZModelSerializerMixin:
     # Override `get_fields` method to add UTZ fields to the serializer
     def get_fields(self):
         fields = super().get_fields()
-        fields = self._add_utz_fields(fields)
+        if self.add_utz_fields:
+            fields = self._add_utz_fields(fields)
         return fields
 
-
-    @property
-    def time_related_fields(self):
-        """
-        Returns the time related fields in the serializer's model.
-
-        :return: The time related fields in the self.Meta.model.
-        :rtype: list
-        """
-        return self.serializer_model.time_related_fields
-    
 
     @property
     def serializer_model(self):
@@ -111,15 +103,19 @@ class UTZModelSerializerMixin:
         :param time_related_field: The time related field for which field will be returned. Should already be in `self.time_related_fields`
         :return: UTZTimeField or UTZDateTimeField depending on the type of the time_related_field. Whether its a time or datetime field.
         """
-        if time_related_field not in self.time_related_fields:
+        if time_related_field not in self.serializer_model.time_related_fields:
             raise ValueError(f"Invalid property name: {time_related_field}")
         
-        kwargs = self.Meta.extra_kwargs.get(time_related_field, {}) # Get extra kwargs for the field if any
-        if self.serializer_model.is_datetime_field(time_related_field):
-            return UTZDateTimeField(format=self.datetime_repr_format, **kwargs)
+        extra_kwargs = self.Meta.extra_kwargs.get(time_related_field, {}) # Get extra kwargs for the field if any
+        if is_datetime_field(self. serializer_model, time_related_field):
+            if "format" not in extra_kwargs:
+                extra_kwargs.update({"format": self.datetime_repr_format}) 
+            return UTZDateTimeField(**extra_kwargs)
             
-        elif self.serializer_model.is_time_field(time_related_field):
-            return UTZTimeField(format=self.time_repr_format, **kwargs)
+        elif is_time_field(self.serializer_model, time_related_field):
+            if "format" not in extra_kwargs:
+                extra_kwargs.update({"format": self.time_repr_format})
+            return UTZTimeField(**extra_kwargs)
         return None
 
     
@@ -131,10 +127,10 @@ class UTZModelSerializerMixin:
         :param serializer_fields: dictionary of fields already present in the serializer.
         :return: serializer_fields with `UTZDateTimeField` or `UTZTimeField` for all fields in `self.time_related_fields`.
         """
-        assert type(self.time_related_fields) == list, (
-            f"Invalid type for `time_related_fields`: {type(self.time_related_fields)}."
+        assert type(self.serializer_model.time_related_fields) == list, (
+            f"Invalid type for `time_related_fields`: {type(self.serializer_model.time_related_fields)}."
         )
-        for time_related_field in self.time_related_fields:
+        for time_related_field in self.serializer_model.time_related_fields:
             if time_related_field in self.Meta.fields or time_related_field not in self.Meta.exclude:
                 serializer_fields[time_related_field] = self._get_utz_field_for(time_related_field)
         return serializer_fields
