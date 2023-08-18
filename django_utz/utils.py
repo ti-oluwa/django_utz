@@ -1,6 +1,8 @@
+import zoneinfo
 import pytz
 from django.db import models
 from django.core.exceptions import ValidationError
+
 
 
 def validate_timezone(value):
@@ -21,11 +23,19 @@ def is_timezone_valid(timezone_name: str):
     :param timezone_name: timezone name
     :return: True if timezone_name is a valid timezone, False otherwise.
     """
+    is_pytz = False
+    is_zoneinfo = False
     try:
         pytz.timezone(timezone_name)
-        return True
+        is_pytz = True
     except pytz.exceptions.UnknownTimeZoneError:
-        return False
+        pass
+    try:
+        zoneinfo.ZoneInfo(timezone_name)
+        is_zoneinfo = True
+    except Exception:
+        pass
+    return is_pytz or is_zoneinfo
 
 
 def final(method):
@@ -47,7 +57,7 @@ def get_attr_by_traversal(obj: object, traversal_path: str, default=None):
 
     #### For example:
     ```
-    class A(UTZModelMixin):
+    class A:
         b = B()
     
     class B:
