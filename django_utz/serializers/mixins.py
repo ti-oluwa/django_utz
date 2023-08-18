@@ -2,43 +2,47 @@ from typing import Dict
 from django.core.exceptions import ImproperlyConfigured
 
 from ..models.mixins import UTZModelMixin
-from .fields import UTZDateTimeField, UTZTimeField
-from ..utils import is_datetime_field, is_time_field
+from .fields import UTZDateTimeField
+from ..utils import is_datetime_field
 
 
 
 class UTZModelSerializerMixin:
     """
-    ### Automatically adds the fields defined in `self.Meta.model.time_related_fields` to the serializer as `UTZTimeField`s or `UTZDateTimeField`s.
+    ### Automatically adds the fields defined in `self.Meta.model.datetime_fields` to the serializer as `UTZDateTimeField`'s.
 
-    NOTE: This mixin should only be used if the serializer model inherits `UTZModelMixin`. Also, the auto added fields override fields with the same name in the serializer.
-    To modify the behavior of the auto added fields using keyword arguments, add the keyword arguments in the `extra_kwargs` attribute of the serializer's Meta class.
+    NOTE: This mixin should only be used if the serializer model inherits `UTZModelMixin`. 
+    Also, the auto added fields override already present fields with the same name in the serializer.
+    To modify the behavior of the auto added fields using keyword arguments, 
+    add the keyword arguments in the `extra_kwargs` attribute of the serializer's Meta class.
 
     If you need complete control of the field's behavior you should not use this mixin and instead add the fields manually to the serializer.
 
     ```
-    from django_utz_mixins.fields import UTZDateTimeField, UTZTimeField
+    from django_utz.serializers.fields import UTZDateTimeField
 
     class BookSerializer(serializers.ModelSerializer):
-        created_at_time = UTZTimeField(format="%H:%M:%S %Z (%z)", read_only=True)
+        ...
+        # Display the `created_at` datetime field as time only in the user's timezone
+        created_at_time = UTZDateTimeField(source=created_at, format="%H:%M:%S %Z (%z)", read_only=True)
         updated_at = UTZDateTimeField(format="%Y-%m-%d %H:%M:%S %Z (%z)", read_only=True)
         ...
     ```
 
     The default format in which the datetime fields are represented in the serializer is `"%Y-%m-%d %H:%M:%S %Z (%z)"`.
     This can be changed by setting the `datetime_repr_format` attribute in the serializer class.
-    Also the default format in which the time fields are represented in the serializer is `"%H:%M:%S %Z (%z)"`.
-    This can be changed by setting the `time_repr_format` attribute in the serializer class.
 
-    :attr utz_repr_format: The format in which the datetime fields should be represented in the serializer.
+    :attr datetime_repr_format: The format in which the datetime fields should be represented in the serializer.
     Defaults to `"%Y-%m-%d %H:%M:%S %Z (%z)"`.
+    :attr add_utz_fields: If True, the fields defined in `self.Meta.model.datetime_fields` will be automatically added to the serializer as `UTZDateTimeField`'s.
+    Defaults to True.
 
     #### Example:
     ```
-    from django_utz_mixins.serializers import UTZModelSerializerMixin
+    from django_utz.serializers.mixins import UTZModelSerializerMixin
 
     class BookSerializer(UTZModelSerializerMixin, serializers.ModelSerializer):
-        utz_repr_format = "%Y-%m-%d %H:%M:%S %Z (%z)"
+        datetime_repr_format = "%Y-%m-%d %H:%M:%S %Z"
         
         class Meta:
             model = Book
@@ -49,11 +53,9 @@ class UTZModelSerializerMixin:
             }
     ```
     """
-
     utz_model_mixin = UTZModelMixin
     add_utz_fields = True
     datetime_repr_format = "%Y-%m-%d %H:%M:%S %Z (%z)"
-    time_repr_format = "%H:%M:%S %Z (%z)"
 
 
     def __init__(self, *args, **kwargs):
@@ -66,7 +68,7 @@ class UTZModelSerializerMixin:
     def get_fields(self):
         fields = super().get_fields()
         if self.add_utz_fields:
-            fields = self._add_utz_fields(fields)
+            fields = self.get_and_add_utz_fields(fields)
         return fields
 
 
@@ -91,47 +93,43 @@ class UTZModelSerializerMixin:
         if self.utz_model_mixin not in self.serializer_model.__bases__: # Check that the serializer class inherits `self.utz_model_mixin`
             raise ImproperlyConfigured(f"Model {self.serializer_model.__name__} does not inherit from {self.utz_model_mixin.__name__}.")
 
-        if not hasattr(self.serializer_model, "time_related_fields"):
-            raise AttributeError(f"Model {self.serializer_model.__class__.__name__} does not have `time_related_fields` attribute.")
+        if not hasattr(self.serializer_model, "datetime_fields"):
+            raise AttributeError(f"Model {self.serializer_model.__class__.__name__} does not have `datetime_fields` attribute.")
         return None
     
 
-    def _get_utz_field_for(self, time_related_field: str):
+    def get_utz_field_for_datetime_field(self, datetime_field: str):
         """
-        Returns appropriate UTZ field for the given time related field to the serializer.
+        Returns appropriate UTZ Serializer field for the given datetime field name.
 
-        :param time_related_field: The time related field for which field will be returned. Should already be in `self.time_related_fields`
-        :return: UTZTimeField or UTZDateTimeField depending on the type of the time_related_field. Whether its a time or datetime field.
+        :param datetime_field: The datetime model field for which UTZ serializer field will be returned. Should already be in `self.datetime_fields`
+        :return: django_utz.serializers.fields.UTZDateTimeField
         """
-        if time_related_field not in self.serializer_model.time_related_fields:
-            raise ValueError(f"Invalid property name: {time_related_field}")
+        if datetime_field not in self.serializer_model.datetime_fields:
+            raise ValueError(f"Invalid property name: {datetime_field}")
         
-        extra_kwargs = self.Meta.extra_kwargs.get(time_related_field, {}) # Get extra kwargs for the field if any
-        if is_datetime_field(self. serializer_model, time_related_field):
+        extra_kwargs = self.Meta.extra_kwargs.get(datetime_field, {}) # Get extra kwargs for the field if any
+        if is_datetime_field(self. serializer_model, datetime_field):
             if "format" not in extra_kwargs:
                 extra_kwargs.update({"format": self.datetime_repr_format}) 
             return UTZDateTimeField(**extra_kwargs)
-            
-        elif is_time_field(self.serializer_model, time_related_field):
-            if "format" not in extra_kwargs:
-                extra_kwargs.update({"format": self.time_repr_format})
-            return UTZTimeField(**extra_kwargs)
         return None
 
     
-    def _add_utz_fields(self, serializer_fields: Dict):
+    def get_and_add_utz_fields(self, serializer_fields: Dict):
         """
-        Generates and adds to the serializer_fields, a `UTZDateTimeField`  or `UTZTimeField` for all fields in `self.time_related_fields` 
-        that returns fields value adjusted to `self.serializer_model` user's timezone. This overrides any fields already present in the serializer.
+        Gets and adds to the serializer_fields, a `UTZDateTimeField` for all fields in `self.datetime_fields` 
+        that returns fields value adjusted to `self.serializer_model` preferred user's timezone. 
+        This overrides any fields already present in the serializer.
 
         :param serializer_fields: dictionary of fields already present in the serializer.
-        :return: serializer_fields with `UTZDateTimeField` or `UTZTimeField` for all fields in `self.time_related_fields`.
+        :return: serializer_fields with `UTZDateTimeField` for all fields in `self.datetime_fields`.
         """
-        assert type(self.serializer_model.time_related_fields) == list, (
-            f"Invalid type for `time_related_fields`: {type(self.serializer_model.time_related_fields)}."
+        assert type(self.serializer_model.datetime_fields) == list, (
+            f"Invalid type for `datetime_fields`: {type(self.serializer_model.datetime_fields)}."
         )
-        for time_related_field in self.serializer_model.time_related_fields:
-            if time_related_field in self.Meta.fields or time_related_field not in self.Meta.exclude:
-                serializer_fields[time_related_field] = self._get_utz_field_for(time_related_field)
+        for datetime_field in self.serializer_model.datetime_fields:
+            if datetime_field in self.Meta.fields or datetime_field not in self.Meta.exclude:
+                serializer_fields[datetime_field] = self.get_utz_field_for_datetime_field(datetime_field)
         return serializer_fields
 
