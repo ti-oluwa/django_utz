@@ -1,6 +1,3 @@
 django
 django-rest-framework
 pytz
-backports.zoneinfo
-
-
