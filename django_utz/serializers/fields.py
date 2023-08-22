@@ -1,10 +1,11 @@
+"""Provides custom serializer fields for converting datetime to user's local timezone on representation"""
 import zoneinfo
 from rest_framework import serializers
 from django.conf import settings
 import pytz
 from django.db import models
 
-from ..models.mixins import UTZModelMixin
+from django_utz.models.mixins import UTZModelMixin
 
 
 class UTZBaseField:
@@ -34,36 +35,6 @@ class UTZBaseField:
         else:
             server_timezone = zoneinfo.ZoneInfo(settings.TIME_ZONE) if settings.USE_TZ else zoneinfo.ZoneInfo("UTC")
         return super().to_internal_value(value).astimezone(server_timezone)
-
-
-
-# class UTZTimeField(UTZBaseField, serializers.TimeField):
-    """
-    Custom `serializers.TimeField` that converts time to server's timezone(settings.TIMEZONE) before storage
-    and converts back to user local timezone on representation. This is used by `UTZModelSerializerMixin` to automatically
-    convert time fields to user's local timezone.
-
-    It can also be used as a standalone field in a serializer without the `UTZModelSerializerMixin` mixin.
-
-    if settings.USE_TZ is False, server's timezone is assumed to be UTC
-
-    #### Example:
-    ```python
-    class BookSerializer(serializers.ModelSerializer):
-        created_at_time = UTZTimeField(format="%H:%M:%S %Z (%z)")
-        updated_at_time = UTZTimeField(format="%H:%M:%S %Z (%z)")
-
-        class Meta:
-            model = Book
-            fields = "__all__"
-            extra_kwargs = {
-                "created_at_time": {"read_only": True},
-                "updated_at_time": {"read_only": True},
-            }
-    ```
-    """
-    pass
-
 
 
 class UTZDateTimeField(UTZBaseField, serializers.DateTimeField):

@@ -1,10 +1,11 @@
+"""django_utz model serializers mixins"""
+
 from typing import Dict
 from django.core.exceptions import ImproperlyConfigured
 
-from ..models.mixins import UTZModelMixin
-from .fields import UTZDateTimeField
-from ..utils import is_datetime_field
-
+from django_utz.models.mixins import UTZModelMixin
+from django_utz.serializers.fields import UTZDateTimeField
+from django_utz.utils import is_datetime_field
 
 
 class UTZModelSerializerMixin:
@@ -91,10 +92,14 @@ class UTZModelSerializerMixin:
             f"Invalid `utz_model_mixin` value: {self.utz_model_mixin}."
         )
         if self.utz_model_mixin not in self.serializer_model.__bases__: # Check that the serializer class inherits `self.utz_model_mixin`
-            raise ImproperlyConfigured(f"Model {self.serializer_model.__name__} does not inherit from {self.utz_model_mixin.__name__}.")
+            raise ImproperlyConfigured(
+                f"Model {self.serializer_model.__name__} does not inherit from {self.utz_model_mixin.__name__}."
+            )
 
         if not hasattr(self.serializer_model, "datetime_fields"):
-            raise AttributeError(f"Model {self.serializer_model.__class__.__name__} does not have `datetime_fields` attribute.")
+            raise AttributeError(
+                f"Model {self.serializer_model.__class__.__name__} does not have `datetime_fields` attribute."
+            )
         return None
     
 
@@ -109,7 +114,7 @@ class UTZModelSerializerMixin:
             raise ValueError(f"Invalid property name: {datetime_field}")
         
         extra_kwargs = self.Meta.extra_kwargs.get(datetime_field, {}) # Get extra kwargs for the field if any
-        if is_datetime_field(self. serializer_model, datetime_field):
+        if is_datetime_field(self.serializer_model, datetime_field):
             if "format" not in extra_kwargs:
                 extra_kwargs.update({"format": self.datetime_repr_format}) 
             return UTZDateTimeField(**extra_kwargs)
@@ -129,7 +134,7 @@ class UTZModelSerializerMixin:
             f"Invalid type for `datetime_fields`: {type(self.serializer_model.datetime_fields)}."
         )
         for datetime_field in self.serializer_model.datetime_fields:
-            if datetime_field in self.Meta.fields or datetime_field not in self.Meta.exclude:
+            if (datetime_field in self.Meta.fields) or (datetime_field not in self.Meta.exclude):
                 serializer_fields[datetime_field] = self.get_utz_field_for_datetime_field(datetime_field)
         return serializer_fields
 

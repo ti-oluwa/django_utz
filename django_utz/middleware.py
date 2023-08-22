@@ -1,3 +1,5 @@
+"""Provides middleware that aims to make request user available globally in the application."""
+
 from django.utils.deprecation import MiddlewareMixin
 import threading
 
