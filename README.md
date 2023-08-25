@@ -406,7 +406,7 @@ def user_timezone_changed_receiver(sender, **kwargs):
 
 ### Template Tags
 
-The `django_utz.templatetags.utz` module contains template tags that allow you to display datetime objects in the preferred user's local timezone. To use in a template, load the module and use the `utz` template tag.
+The `django_utz.templatetags.utz` module contains template tags that allow you to display datetime objects in the preferred user's local timezone. To use in a template, load the module in your template:
 
 ```html
 {% load utz %}
@@ -414,8 +414,7 @@ The `django_utz.templatetags.utz` module contains template tags that allow you t
 
 Available template tags include:
 
-- `usertimezone`: This is a block tag that renders template content with datetime object(s) contained within the block in the request user's timezone but the preferred user can be passed as an argument or keyword argument.
-Assuming that we want to write a template for our post list view, we can do this:
+- `usertimezone`: This is a block tag that renders template content with datetime object(s) contained within the block in the request user's timezone but the preferred user can be passed as an argument or keyword argument. Assuming that we want to write a template for our post list view, we can do this:
 
 Here the datetime objects, `post.created_at` is rendered in the request user's timezone:
 
@@ -490,7 +489,7 @@ We can also pass the preferred user as an argument:
 
 ### The `django_utz.utils` module
 
-The `django_utz.utils` module contains utility functions that can be used when handling timezone aware datetime objects.
+The `django_utz.utils` module contains utility functions that can be used when handling timezone/datetime related activities.
 Some of these functions include:
 
 - `validate_timezone(value)`: This is a validator function that validates a timezone name or timezone info object. It raises a ValidationError if the value is not a valid timezone name or timezone info object.
