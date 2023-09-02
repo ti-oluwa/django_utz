@@ -207,6 +207,57 @@ class Post(UTZModelMixin, models.Model):
 
 Here our model `Post` is sub classed with the `UTZModelMixin` mixin. The `datetime_fields` attribute is used to specify the datetime fields in the model that the new properties will be added for. In this case, the `created_at` and `updated_at` fields are the datetime fields in the `Post` model that we need in the preferred user's timezone. To access the user timezone aware datetime properties we use the fields name suffixed by "utz" (e.g. `created_at_utz` and `updated_at_utz`).
 
+However for the sake of simplicity and uniformity, when adding extra (datetime) properties or attributes to the model which you also need in the preferred user's timezone, the name of such properties or attributes can be added to `datetime_fields` list. Let's add some properties to the `Post` model:
+
+```python
+... # imports
+from django.utils import timezone
+
+class Post(UTZModelMixin, models.Model):
+    '''Post model'''
+    author = models.ForeignKey(User, on_delete=models.CASCADE)
+    title = models.CharField(max_length=255)
+    content = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    ...
+
+    current_time = timezone.now() # Datetime attribute
+    datetime_fields = ["created_at", "updated_at", "authors_join_date", "current_time"] # `authors_join_date` is a property we want in the preferred user's timezone. Likewise, `current_time`
+
+    @property
+    def authors_join_date(self):
+        return self.author.date_joined
+    # In this case, it is advisable to just use this mixin in the author's model. So `post.author.date_joined_utz` can be used instead of `post.authors_join_date_utz`
+```
+
+You can construct utz properties yourself using the user object `to_local_timezone` method. Let's say we want to add a property called `created_at_utz` to the `Post` model:
+
+```python
+... # imports
+
+class Post(UTZModelMixin, models.Model):
+    '''Post model'''
+    author = models.ForeignKey(User, on_delete=models.CASCADE)
+    ...
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    ...
+    datetime_fields = ["created_at", "updated_at"]
+    use_related_user_timezone = False # This is set to False so the preferred user will be the request user
+
+    @property
+    def created_at_author_tz(self):
+        return self.author.to_local_timezone(self.created_at)
+
+    @property
+    def updated_at_author_tz(self):
+        return self.author.to_local_timezone(self.updated_at)
+    
+```
+
+From the above example, not only can we now access the `created_at` and `updated_at` fields in the post's author's timezone using the `created_at_author_tz` and `updated_at_author_tz` properties respectively. But also in the request user's timezone using the `created_at_utz` and `updated_at_utz` properties respectively.
+
 ```python
 from django.contrib.auth import get_user_model
 from my_app.models import Post
@@ -221,8 +272,10 @@ new_post = Post.objects.create(
 )
 new_post.save()
 date_created_in_utz = new_post.created_at_utz
+date_created_in_author_tz = new_post.created_at_author_tz
 date_created_in_server_tz = new_post.created_at
 print(date_created_in_utz: %Y-%m-%d %H:%M:%S %Z (%z)) # In request user's timezone
+print(date_created_in_author_tz: %Y-%m-%d %H:%M:%S %Z (%z)) # In post's author's timezone
 print(date_created_in_server_tz: %Y-%m-%d %H:%M:%S %Z (%z)) # In server's timezone
 
 ```
@@ -429,7 +482,7 @@ Here the datetime objects, `post.created_at` is rendered in the request user's t
 {% endusertimezone %}
 ```
 
-Say we want to render the datetime objects, `post.created_at` in the timezone of the author of the first post, we can do this:
+Say we want to render the datetime object, `post.created_at` in the timezone of the author of the first post, we can do this:
 
 First approach:
 
@@ -461,7 +514,7 @@ Alternatively;
 
 There are also template filters that allow you to display datetime objects in the preferred user's local timezone. Available template filters include:
 
-- `usertimezone`: This filter returns a datetime object in the request user's timezone but the preferred user can be passed as an argument or keyword arguments.
+- `usertimezone`: This filter returns a datetime object in the request user's timezone but the preferred user can be passed as an argument.
 Assuming that we want to write a template for our post detail view, we can do this:
 
 ```html
@@ -622,4 +675,4 @@ utz_datetime.disregard_usetz()
 # Now the utzdatetime object is independent of settings.USE_TZ
 ```
 
-**Contributors and feedbacks are welcome. For feedbacks, please open an issue. To contribute, please fork the repo and submit a pull request. If you find this module useful, please consider giving it a star. Thanks!**
+**Contributions and feedbacks are welcome. For feedbacks, please open an issue. To contribute, please fork the repo and submit a pull request. If you find this module useful, please consider giving it a star. Thanks!**
