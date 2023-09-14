@@ -289,7 +289,7 @@ class UTZModelMixin:
             else:
                 user = get_request_user()
                 
-        if self.pk: # Only check if the model object has been saved
+        if user and self.pk: # Only check if the model object has been saved
             self.check_user_has_utz_mixin(user)
         return user
     

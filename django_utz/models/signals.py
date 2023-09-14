@@ -5,7 +5,11 @@ from django.db.models.signals import pre_save, post_save
 from django_utz.models.mixins import UTZUserModelMixin
 
 User = get_user_model()
-user_timezone_changed = Signal(["user", "previous_timezone", "current_timezone"])
+# -----------------------------
+user_timezone_changed = Signal()
+# This signal is sent when a user's timezone is changed.
+# kwargs: user, previous_timezone, current_timezone
+# -----------------------------
 
 @receiver(pre_save, sender=User)
 def utz_change_handler_pre_save(sender, **kwargs):
