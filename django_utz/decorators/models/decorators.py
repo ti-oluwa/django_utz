@@ -172,7 +172,7 @@ class RegularModelDecorator(ModelDecorator):
 
         :param datetime_field: The name of the datetime field for which to make the function
         """
-        func_name = f"get_{datetime_field}_{self.get_config("attribute_suffix")}"
+        func_name = f"get_{datetime_field}_{self.get_config('attribute_suffix')}"
 
         def func(model_instance: models.Model) -> utzdatetime:
             user: UserModel = get_user(model_instance)
