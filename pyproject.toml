@@ -37,6 +37,7 @@ classifiers = [
 dependencies = [
   "django>=3.2.5",
   "pytz",
+  "djangorestframework",
 ]
 
 [project.urls]
