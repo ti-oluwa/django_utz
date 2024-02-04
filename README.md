@@ -1,6 +1,8 @@
 # django-utz
 
-Django mixins that allow you retrieve datetime model fields in the preferred user's local timezone. "utz" here means "user timezone". This modules provides mixins for the User model, any other model and any django rest framework model serializer.
+django-utz provides easy-to-use decorators that allow you easily retrieve/display datetime values in the request user's or a specific user's local timezone without needing to do manual timezone conversions for each user.
+
+"utz" here means "user time zone". This django app provides decorators for the project's User model, regular django models and django rest framework model serializers.
 
 ## Installation
 
@@ -30,39 +32,73 @@ MIDDLEWARE = [
 ]
 ```
 
-To your User model, add the `UTZUserModelMixin` mixin:
+You can then import and use the required user model decorator
 
 ```python
 from django.contrib.auth.models import AbstractUser
 
-from django_utz.models.mixins import UTZUserModelMixin
+from django_utz.decorators import usermodel
 
-class User(UTZUserModelMixin, AbstractUser):
-    '''User model'''
-    pass
+
+@usermodel
+class CustomUser(AbstractUser):
+    '''Project's user model'''
+    email = models.EmailField()
+    username = models.CharField(max_length=50)
+    timezone = models.CharField(max_length=20)
+    ...
     
+    class UTZMeta:
+        timezone_field = "timezone"
 ```
 
-## Mixins
+## Decorators
 
-To use the mixins, simply subclass them in your model or serializer.
+django_utz comes bundled with three decorators:
 
-### The `UTZUserModelMixin` mixin
+- `usermodel`: The project's User model must be decorated with this decorator for django_utz to work.
+- `model`: Regular django models can be decorated with this decorator so that datetime fields in the model can be accessed in request.user's or any specified user local timezone always.
+- `modelserializer`: Django rest framework model serializers can be decorated with this decorator so that the serializer's model datetime fields will always be returned in request.user's or any specified user local timezone in API responses.
 
-The `UTZUserModelMixin` mixin is meant to be used with the User model by sub classing the User model with it.
+Configurations for each model are defined in a `UTZMeta` class just inside the model or model serializer class.
 
-#### Attributes
+For instance;
 
-- `user_timezone_field`: The field that contains the user timezone info.
-- `utz`: A property that returns the user timezone info as a zoneinfo.ZoneInfo or pytz.timezone object. This is used internally by the `to_local_timezone` method. If settings.USE_DEPRECATED_PYTZ is set to `True`, this property returns the user timezone info as a pytz.timezone object. If the `user_timezone_field` attribute is not set, this property returns a settings.TIME_ZONE or "UTC" zoneinfo.ZoneInfo or pytz.timezone object.
+```python
+from django.db import models
 
-Here we will use [django-timezone-field](https://github.com/mfogel/django-timezone-field/) to add timezone support to our User model. You can use any other timezone field you want.
+from django_utz.decorators import model
+
+@model
+class Post(models.Model):
+    '''Post model'''
+    title = models.CharField(max_length=255)
+    content = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    ...
+    
+    class UTZMeta:
+        datetime_fields = ["created_at", "updated_at"]
+        use_related_user_timezone = True
+        related_user = "author"
+```
+
+The possible configurations for each decorator will be discussed in the next sections.
+
+### The `usermodel` decorator
+
+The `usermodel` decorator is used to decorate the project's User model. This decorator adds timezone support to the User model. It adds a property to the User model that returns the user's timezone info as a zoneinfo.ZoneInfo or pytz.tzinfo object. It also adds a method to the User model that converts a datetime object to the user's local timezone and returns a `utzdatetime` object.
+
+Let's look at an example of how you would use the `usermodel` decorator:
+
+Here we will use [django-timezone-field](https://github.com/mfogel/django-timezone-field/) to add a timezone field to our User model. You can use any field you want.
 
 ```bash
 pip install django-timezone-field
 ```
 
-In settings.py:
+In settings.py, add `timezone_field` to `INSTALLED_APPS`:
 
 ```python
 
@@ -73,16 +109,17 @@ INSTALLED_APPS = [
 ]
 ```
 
-In models.py:
+In models.py, let's create a User model and decorate it with the `usermodel` decorator:
 
 ```python
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 
-from django_utz.models.mixins import UTZUserModelMixin
+from django_utz.decorators import usermodel
 from timezone_field import TimeZoneField
 
-class User(UTZUserModelMixin, AbstractBaseUser, PermissionsMixin):
+@usermodel
+class CustomUser(AbstractBaseUser, PermissionsMixin):
     '''User model'''
     username = models.CharField(max_length=255, unique=True)
     email = models.EmailField(max_length=255, unique=True)
@@ -92,345 +129,256 @@ class User(UTZUserModelMixin, AbstractBaseUser, PermissionsMixin):
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = ["username"]
 
-    user_timezone_field = "timezone" # valid user timezone info field name
+    class Meta:
+        verbose_name = "Custom user"
+        verbose_name_plural = "Custom users"
 
-
-user_1 = User.objects.create(
-    username = "user_1",
-    email = "userabc@gmail.com",
-    timezone = "Africa/Lagos",
-)
-user_1.save()
-print(user_1.timezone)
-# Prints: Africa/Lagos
-# Note this field returns a zoneinfo.ZoneInfo object or a pytz.tzinfo object depending on keyword arguments passed to the field
+    class UTZMeta:
+        timezone_field = "timezone" # valid user timezone info field name
 ```
 
-In the code sample above, we can see that the `UTZUserModelMixin` mixin was added to our AbstractBaseUser model. The same can be done to the AbstractUser and default User model.
+Simple right! Now let's look at the configurations for the `usermodel` decorator.
 
-The `user_timezone_field` attribute is used to specify the field that contains the user timezone info or name. Say we create another User model with the `UTZUserModelMixin` mixin, but this time, we want to use another field called `tz_name` to store the user timezone name. We can do this by setting the `user_timezone_field` attribute to `tz_name`:
+The only configuration for the `usermodel` decorator is the `timezone_field` attribute. This attribute is used to specify the field that contains the user timezone info or name, as seen in the example above.
 
-```python
-import zoneinfo
-from django.contrib.auth.models import AbstractUser
+The `usermodel` decorator adds a property and a method to the User model. It can be said these added property and method are the backbone of the `django_utz` module. Let's look at them:
 
-from django_utz.models.mixins import UTZUserModelMixin
+- The `utz` property: This property returns the user's timezone info as a zoneinfo.ZoneInfo or pytz.tzinfo object, even if the user's timezone is stored as a string in the database. 
 
-class User(UTZUserModelMixin, AbstractUser):
-    '''User model'''
-    TIMEZONE_CHOICES = tuple((tz, tz) for tz in sorted(zoneinfo.available_timezones()))
-    ...
-    tz_name = models.CharField(max_length=255, blank=True, verbose_name="Timezone name", choices=TIMEZONE_CHOICES)
-    ...
-    user_timezone_field = "tz_name" # valid user timezone info field name
+The type of timezone info object returned depends mainly on the `USE_DEPRECATED_PYTZ` setting. If `USE_DEPRECATED_PYTZ` is set to `True`, the timezone info object returned will be a pytz.tzinfo object. Otherwise, the timezone info object returned will be a zoneinfo.ZoneInfo object.
 
+- The `to_local_timezone` method: This method converts any datetime object passed to it to a `utzdatetime` object in the user's local timezone as returned by the `utz` property.
 
-user_1 = User.objects.create(
-    username = "user_1",
-    email = "userabc@gmail.com",
-    tz_name = "Africa/Lagos",
-)
-user_1.save()
-print(user_1.tz_name)
-# Prints: Africa/Lagos
-# Note this field returns the timezone name as a string
-
-```
-
-However, to access the user's timezone info as a zoneinfo.ZoneInfo or pytz.timezone object anytime, we can use the `utz` property:
+To see how these work, we can create a user instance and use the `utz` property and `to_local_timezone` method:
 
 ```python
-
-user_1 = User.objects.get(pk=1)
-print(type(user_1.utz))
-# Here, a zoneinfo.ZoneInfo object or pytz.timezone object is returned depending
-```
-
-#### Methods
-
-- `to_local_timezone(_datetime: datetime.datetime)`: Converts a datetime object to the user's local timezone and returns a
-`utzdatetime` object.
-
-```python
-from django.contrib.auth import get_user_model
-import timezone
-
-User = get_user_model()
-user = User.objects.get(pk=1)
-now = timezone.now()
-now_in_utz = user.to_local_timezone(now)
-print(f"The current time in {user.username}'s timezone is {now_in_utz:%Y-%m-%d %H:%M:%S %Z (%z)}")
-print(f"The current time in server's timezone is {now:%Y-%m-%d %H:%M:%S %Z (%z)}")
-```
-
-- `is_user_model()`: This is a class method that returns `True` if the model in which this mixin is used is the User model and `False` otherwise.
-
-### The `UTZModelMixin` mixin
-
-The `UTZModelMixin` mixin can be used in any model including the User model, by sub classing the model with it. This mixin automatically adds properties which return the values datetime model fields of the model in the preferred user's local timezone.
-
-#### Attributes
-
-- `datetime_fields`: A list of the datetime model fields that we want preferred user timezone aware properties for. Defaults to an empty list. Should be overridden in the model that subclasses this mixin.
-- `utz_property_suffix`: The string with which the user timezone aware datetime properties are suffixed. Defaults to "utz".
-- `use_related_user_timezone`: If True, the mixin gets the user related to the model(as specified or automatically) and uses its timezone. If False, the mixin uses the request user's timezone. Defaults to False.
-- `related_user_field_path`: The name/traversal path of the field in the model in which this mixin is used, that holds/returns the preferred user.
-
-> **NOTE: "Preferred user" as used in context here refers to the user who timezone zone will be used and by default, refers to the authenticated `request.user`. However, if `use_related_user_timezone` is set to True, the preferred user to be used can also be specified by providing the traversal path user field, to the `related_user_field_path` attribute but if left empty, the mixin will try to find the traversal path to the related user itself. In the case that the mixin has to search for the related user itself, the traversal path to the field holding the preferred user will be the traversal path of the "FIRST" One-to-One or ForeignKey field associated with the user model. Also note that all request users will now be fed the timezone adjusted datetime fields in that one single timezone as it will no longer be unique for each `request.user`. Check the last example in this section for more info on implementation.**
-
-In my_app.models.py:
-
-Let's say our User model is related to other models which have timezone aware datetime fields. We can add user timezone support to these models by sub classing them with the `UTZModelMixin` mixin so user timezone aware properties for the datetime fields are added to the models.
-
-Let's create a model called `Post` in "my_app" app:
-
-```python
-from django.db import models
-from django.contrib.auth import get_user_model
-
-from django_utz.models.mixins import UTZModelMixin
-
-User = get_user_model()
-
-class Post(UTZModelMixin, models.Model):
-    '''Post model'''
-    author = models.ForeignKey(User, on_delete=models.CASCADE)
-    title = models.CharField(max_length=255)
-    content = models.TextField()
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    ...
-
-    datetime_fields = ["created_at", "updated_at"]
-    
-```
-
-Here our model `Post` is sub classed with the `UTZModelMixin` mixin. The `datetime_fields` attribute is used to specify the datetime fields in the model that the new properties will be added for. In this case, the `created_at` and `updated_at` fields are the datetime fields in the `Post` model that we need in the preferred user's timezone. To access the user timezone aware datetime properties we use the fields name suffixed by "utz" (e.g. `created_at_utz` and `updated_at_utz`).
-
-However for the sake of simplicity and uniformity, when adding extra (datetime) properties or attributes to the model which you also need in the preferred user's timezone, the name of such properties or attributes can be added to `datetime_fields` list. Let's add some properties to the `Post` model:
-
-```python
-... # imports
 from django.utils import timezone
 
-class Post(UTZModelMixin, models.Model):
+my_user = CustomUser.objects.create_user(
+    username="Tolu",
+    email="testing321@gmail.com",
+    password="testing321",
+    timezone="Africa/Lagos"
+)
+
+# Getting the user's timezone info
+user_timezone = my_user.utz
+print(user_timezone) # Africa/Lagos
+print(type(user_timezone)) # zoneinfo.ZoneInfo, assuming USE_DEPRECATED_PYTZ is set to False
+
+# Converting a datetime object in server's timezone (UTC) to user's local timezone
+now = timezone.now()
+print(now) # 1996-12-19 16:39:57.000200+00:00
+now_in_user_tz = my_user.to_local_timezone(now)
+print(now_in_user_tz) # 1996-12-19 17:39:57.000200+01:00
+```
+
+In the above example, we can see that the current time in the user's timezone is one hour ahead of the current time in the server's timezone.
+
+> Note that the `to_local_timezone` method returns a `utzdatetime` object. This is because the `utzdatetime` object is independent of settings.USE_TZ. This means that the `utzdatetime` object will always be in the user's timezone regardless of the value of settings.USE_TZ. Read more on the `utzdatetime` object [here](#the-utzdatetime-object).
+
+### The `model` decorator
+
+The `model` decorator is used to decorate regular django models. This decorator allows you to access datetime fields in the model in a user's local timezone. The user can be the request user or any specified user. By default, the request user is used.
+
+Curious about how this works? To keep things simple, the decorator uses a kind of descriptor called the `FunctionAttribute` descriptor to add a new version of each datetime field to the model class. This new version of the datetime field is suffixed with "utz"(by default) and is a property that returns the datetime field in the user's local timezone.
+
+Say for example, we have a model called `Post` and we want to access the `created_at` field in the request user's timezone.
+
+```python
+from django.db import models
+
+from django_utz.decorators import model
+
+@model
+class Post(models.Model):
     '''Post model'''
-    author = models.ForeignKey(User, on_delete=models.CASCADE)
     title = models.CharField(max_length=255)
+    content = models.TextField()
+    author = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    ...
+
+    class UTZMeta:
+        datetime_fields = "__all__"
+```
+
+The decorator adds a new attribute to the `Post` model called `created_at_utz`. Let's create a post instance and see how this works:
+
+```python
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
+
+tolu = User.objects.get(username="Tolu")
+
+new_post = Post.objects.create(
+    title="New Post",
+    content="Lorem Ipsum",
+    author=tolu
+)
+
+# If the post was created at 12:00:00 UTC, it will be 13:00:00 in the user's timezone.
+# Remember, Tolu's timezone is "Africa/Lagos"
+print(new_post.created_at_utz) # 1996-12-19 13:00:00.000200+01:00
+```
+
+The `model` decorator has a few configurations one of which was used in the model definition above. The configurations are:
+
+- `datetime_fields`: A list or tuple of the model's datetime fields for which user timezone aware fields should be added. If set to `"__all__"`, all datetime fields in the model will have user timezone aware fields added.
+
+- `use_related_user_timezone`: An optional boolean value that determines if the user timezone aware fields should be based on the timezone of a directly related user, not the request user. This defaults to `False`.
+
+The related user in the case of the `Post` model is the `post.author`. If a related user is not found directly in the model, django_utz tries to search for a user in the related models of the model. A related model is usually a model that is linked by a ForeignKey or OneToOneField to the current model.
+
+To define explicitly the user whose timezone will be used, you can set this comfiguration to `True` and then defined the path to user on the `related_user` configuration.
+
+- `related_user`: This is also an optional configuration that specifies the path to the user whose timezone will be used. This is only used when `use_related_user_timezone` is set to `True`. The path is a string that represents the path to the user from the model. The path is in the format `related_model.related_model....user_field`. 
+
+Looks complicated? Let's look at two examples:
+
+**Example 1:**
+Assume we want all datetime fields in the `Post` model to always be returned in the post author's timezone. We can do this:
+
+```python
+from django.db import models
+
+from django_utz.decorators import model
+
+@model
+class Post(models.Model):
+    '''Post model'''
+    title = models.CharField(max_length=255)
+    content = models.TextField()
+    author = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    ...
+
+    class UTZMeta:
+        datetime_fields = "__all__"
+        use_related_user_timezone = True
+        related_user = "author"
+```
+
+So no matter the user that makes the request, the datetime fields in the `Post` model will always be returned in the post author's timezone.
+
+You could also decide to not specify the `related_user` configuration. django_utz will use the first user it finds in the related models of the model. Which is the `author` in this case.**
+
+**Example 2:**
+
+Let's add a new model called `Comment` that is related to the `Post` model. However, we want all datetime fields in the `Comment` model to always be returned in the post author's timezone. We can do this:
+
+```python
+from django.db import models
+
+from django_utz.decorators import model
+
+@model
+class Comment(models.Model):
+    '''Comment model'''
+    post = models.ForeignKey(Post, on_delete=models.CASCADE)
+    author = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
     content = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     ...
 
-    current_time = timezone.now() # Datetime attribute
-    datetime_fields = ["created_at", "updated_at", "authors_join_date", "current_time"] # `authors_join_date` is a property we want in the preferred user's timezone. Likewise, `current_time`
-
-    @property
-    def authors_join_date(self):
-        return self.author.date_joined
-    # In this case, it is advisable to just use this mixin in the author's model. So `post.author.date_joined_utz` can be used instead of `post.authors_join_date_utz`
+    class UTZMeta:
+        datetime_fields = "__all__"
+        use_related_user_timezone = True
+        related_user = "post.author"
 ```
 
-You can construct utz properties yourself using the user object `to_local_timezone` method. Let's say we want to add a property called `created_at_utz` to the `Post` model:
+In this case, the `related_user` configuration is set to `"post.author"`. This means that the datetime fields in the `Comment` model will always be returned in the post author's timezone, not the comment author's timezone (to be clear, the comment author is the user that made the comment).
+
+Hence, Assuming 'Tolu' already created a new post called 'new_post' and we created a user called 'Tade' with a timezone of "Asia/Tokyo", we can do this:
 
 ```python
-... # imports
+tade = User.objects.get(username="Tade")
 
-class Post(UTZModelMixin, models.Model):
-    '''Post model'''
-    author = models.ForeignKey(User, on_delete=models.CASCADE)
-    ...
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    ...
-    datetime_fields = ["created_at", "updated_at"]
-    use_related_user_timezone = False # This is set to False so the preferred user will be the request user
-
-    @property
-    def created_at_author_tz(self):
-        return self.author.to_local_timezone(self.created_at)
-
-    @property
-    def updated_at_author_tz(self):
-        return self.author.to_local_timezone(self.updated_at)
-    
-```
-
-From the above example, not only can we now access the `created_at` and `updated_at` fields in the post's author's timezone using the `created_at_author_tz` and `updated_at_author_tz` properties respectively. But also in the request user's timezone using the `created_at_utz` and `updated_at_utz` properties respectively.
-
-```python
-from django.contrib.auth import get_user_model
-from my_app.models import Post
-
-User = get_user_model()
-
-user_1 = User.objects.get(pk=1)
-new_post = Post.objects.create(
-    author = user_1,
-    title = "New Post",
-    content = "Lorem Ipsum",
+comment = Comment.objects.create(
+    post=new_post,
+    author=tade,
+    content="Nice post!"
 )
-new_post.save()
-date_created_in_utz = new_post.created_at_utz
-date_created_in_author_tz = new_post.created_at_author_tz
-date_created_in_server_tz = new_post.created_at
-print(date_created_in_utz: %Y-%m-%d %H:%M:%S %Z (%z)) # In request user's timezone
-print(date_created_in_author_tz: %Y-%m-%d %H:%M:%S %Z (%z)) # In post's author's timezone
-print(date_created_in_server_tz: %Y-%m-%d %H:%M:%S %Z (%z)) # In server's timezone
 
+print(comment.created_at_utz) # 1996-12-19 13:00:00.000200+01:00 (Africa/Lagos)
+print(comment.author.utz) # Asia/Tokyo
+print(comment.author.to_local_timezone(comment.created_at)) # 1996-12-19 21:00:00.000200+09:00 (Asia/Tokyo)
 ```
 
-To change the value with which the added properties are suffixed, we can set the `utz_property_suffix` attribute to a desired value:
+- `attribute_suffix`: This is an optional configuration that specifies the suffix to be added to the user timezone aware fields. This defaults to "utz".
+
+You may want to access created_at in the user's timezone as `created_at_local` instead of `created_at_utz`. You can do this:
 
 ```python
-from django.db import models
 
-from django_utz.models.mixins import UTZModelMixin
-
-class Post(UTZModelMixin, models.Model):
+@model
+class Post(models.Model):
     '''Post model'''
     ...
-    datetime_fields = ["created_at", "updated_at"]
-    utz_property_suffix = "local" # default is "utz"
-    
+
+    class UTZMeta:
+        ...
+        attribute_suffix = "local"
 ```
 
-Now we can access the user timezone aware datetime properties with the fields name suffixed by "local" (e.g. `created_at_local` and `updated_at_local`).
+### The `modelserializer` decorator
 
-```python
-from django.contrib.auth import get_user_model
-from my_app.models import Post
+This decorator is used to decorate django rest framework model serializers. As said at the beginning, this decorator allows you to always return the serializer's model datetime fields in the request user's local timezone or any specified user's local timezone(based on the configurations in the serializer's model) in API responses.
 
-User = get_user_model()
-user_1 = User.objects.get(pk=1)
-new_post = Post.objects.create(
-    author = user_1,
-    title = "New Post",
-    content = "Lorem Ipsum",
-)
-new_post.save()
-date_created_in_utz = new_post.created_at_local
-date_created_in_server_tz = new_post.created_at
-print(date_created_in_utz: %Y-%m-%d %H:%M:%S %Z (%z)) # In request user's timezone
-print(date_created_in_server_tz: %Y-%m-%d %H:%M:%S %Z (%z)) # In server's timezone
-
-```
-
-> This mixin can also be used in the User model alongside the `UTZUserModelMixin` mixin.
-
-To display the datetime fields in the post.author's timezone for all users, we can set the `use_related_user_timezone` attribute to `True` and optionally set `related_user_field_path` as well:
-
-```python
-from django.db import models
-
-from django_utz.models.mixins import UTZModelMixin
-
-class Post(UTZModelMixin, models.Model):
-    '''Post model'''
-    ...
-    datetime_fields = ["created_at", "updated_at"]
-    use_related_user_timezone = True
-    related_user_field_path = "author" # This can also be a traversal path to the field holding the preferred user, e.g "author.user"
-
-# Now all users, regardless of their individual timezones, will see the datetime fields in the post.author's timezone
-post = Post.objects.get(pk=1)
-print(post.created_at_utz)
-```
-
-You may want to use this configuration only if you want all users to see the datetime fields in the same timezone (that is, the timezone of the user related to that object). This is useful for applications that are not user specific. 
-
-An example use case would be in a foreign TV show app that shows the time a show will be live/viewable in the timezone of the country where the show is streamed from for all users. This is not a perfect example but I hope you get the idea.
-
-#### Methods
-
-- `find_user_related_model_field()`: Returns the traversal path to the field related to the User model in the model in which
-    this mixin is used or its related models.
-
-```python
-from django.contrib.auth import get_user_model
-from my_app.models import Post
-
-User = get_user_model()
-user_1 = User.objects.get(pk=1)
-new_post = Post.objects.create(
-    author = user_1,
-    title = "New Post",
-    content = "Lorem Ipsum",
-)
-new_post.save()
-user_related_model_field = new_post.find_user_related_model_field()
-print(user_related_model_field)
-
-# result: author
-```
-
-- `get_preferred_user()`: Returns the preferred user to be used. If `use_related_user_timezone` is set to `True`, the user related to the model will be returned(as specified or otherwise). If `use_related_user_timezone` is set to `False`, the request user will be returned. Read the docstring for more info.
-
-- `is_user_model()`: This is a class method that returns `True` if the model in which this mixin is used is the User model and `False` otherwise.
-
-### The `UTZModelSerializerMixin` mixin
-
-The `UTZModelSerializerMixin` mixin is meant to be used with any django rest framework model serializer by sub classing the serializer with it. This mixin automatically adds preferred user timezone aware serializer fields to the serializer for fields in the serializer's model that are present in the serializer model's `datetime_fields` attribute.
-
-#### Attributes
-
-- `add_utz_fields`: A boolean value that determines if the user timezone aware serializer datetime fields should be automatically added to the serializer. Defaults to `True`.
-- `datetime_repr_format`: The format with which the datetime fields are represented. Defaults to "%Y-%m-%d %H:%M:%S %Z (%z)".
-- `serializer_model`: The model of the serializer. Returns serializer.Meta.model.
-
-**NOTE:**
-
-1. The serializer's model must subclass the `UTZModelMixin` mixin.
-2. If you need complete control over the serializer fields, you can set the `add_utz_fields` attribute to `False` or decide not to subclass the serializer with this mixin and add then the timezone aware serializer fields manually. Read more on timezone aware serializer fields [here](#serializer-fields).
+However, for the decorator to work, the serializer's model must have also been decorated with the `model` decorator.
 
 Let's say we want to create a serializer for our model `Post`:
 
 ```python
 from rest_framework import serializers
-from django_utz.serializers.mixins import UTZModelSerializerMixin
+from django_utz.decorators import modelserializer
 
 from my_app.models import Post
 
-class PostSerializer(UTZModelSerializerMixin, serializers.ModelSerializer):
+@modelserializer
+class PostSerializer(serializers.ModelSerializer):
     '''Post serializer'''
     class Meta:
         model = Post
         fields = "__all__"
 
-# This way all fields in serializer.Meta.model.datetime_fields will be user timezone aware
+    class UTZMeta:
+        auto_add_fields = True
+
 ```
 
-You can use the `extra_kwargs` attribute to set keyword arguments for the automatically added fields:
+The available configurations for the `modelserializer` decorator are:
 
-```python
-class PostSerializer(UTZModelSerializerMixin, serializers.ModelSerializer):
-    '''Post serializer'''
-    class Meta:
-        model = Post
-        fields = "__all__"
-        extra_kwargs = {
-            "created_at": {"read_only": True},
-            "updated_at": {"read_only": True},
-        }
-```
+- `auto_add_fields`: This is a boolean value that determines if the decorator should automatically add timezone aware serializer fields to the serializer. This defaults to `True`.
+
+- `datetime_format`: This is an optional string that specifies the format to be used when serializing the datetime fields.
+
+> If you need complete control over the serializer fields, you can set the `auto_add_fields` config to `False` or decide not to decorate the model serializer and then add the timezone aware serializer fields manually. Read more on timezone aware serializer fields [here](#serializer-fields).
+
+Also, you do not need to worry about the serializers Meta configuration not been applied. The `modelserializer` decorator respects the Meta configuration of the serializer so all excluded fields, read_only fields, and extra keyword arguments etc will be respected.
 
 ## Fields
 
 ### Serializer Fields
 
-In the case that you need complete control over the serializer fields, you can add user timezone aware serializer datetime fields manually.
+In the case that you need complete control over the auto-added serializer fields, you can add user timezone aware serializer datetime fields manually.
 
-- `UTZDateTimeField`: A serializer field that represents a timezone aware datetime field in the preferred user's local timezone.
+- `UTZDateTimeField`: A serializer field that represents a timezone aware datetime field in the preferred user's local timezone (as defined in the serializer's model).
 
 ```python
 from rest_framework import serializers
 
-from django_utz.serializers.fields import UTZDateTimeField
+from django_utz.serializers_fields import UTZDateTimeField
 
 class PostSerializer(serializers.ModelSerializer):
     '''Post serializer'''
     created_at = UTZDateTimeField(read_only=True, format="%Y-%m-%d %H:%M:%S %Z (%z)")
     updated_at = UTZDateTimeField(read_only=True, label="Last updated at", format="%Y-%m-%d %H:%M:%S %Z (%z)")
+
     class Meta:
         model = Post
         fields = "__all__"
@@ -438,15 +386,15 @@ class PostSerializer(serializers.ModelSerializer):
 
 ## Signals
 
-The `django_utz.models.signals` module contains signals that are sent when an event occurs on a user's timezone. The signals are:
+The `django_utz.signals` module contains signals that are sent when an event occurs on a user's timezone. The signals are:
 
 - `user_timezone_changed`: Sent when a user's timezone is updated.
 
-In your receiver, you can access the user object, its previous timezone and current timezone with the `user`, `previous_timezone`and `current_timezone` keyword arguments respectively.
+In your receiver, you can access the user object, its previous timezone and current timezone with the `instance`, `previous_timezone`and `current_timezone` keyword arguments respectively.
 
 ```python
 from django.dispatch import receiver
-from django_utz.models.signals import user_timezone_changed
+from django_utz.signals import user_timezone_changed
 
 @receiver(user_timezone_changed)
 def user_timezone_changed_receiver(sender, **kwargs):
@@ -459,20 +407,18 @@ def user_timezone_changed_receiver(sender, **kwargs):
 
 ### Template Tags
 
-The `django_utz.templatetags.utz` module contains template tags that allow you to display datetime objects in the preferred user's local timezone. To use in a template, load the module in your template:
+The `django_utz.templatetags.django_utz` module contains a template tag that allows you to display datetime objects in the preferred user's local timezone. To use in a template, load the module in your template:
 
 ```html
-{% load utz %}
+{% load django_utz %}
 ```
-
-Available template tags include:
 
 - `usertimezone`: This is a block tag that renders template content with datetime object(s) contained within the block in the request user's timezone but the preferred user can be passed as an argument or keyword argument. Assuming that we want to write a template for our post list view, we can do this:
 
 Here the datetime objects, `post.created_at` is rendered in the request user's timezone:
 
 ```html
-{% load utz %}
+{% load django_utz %}
 {% usertimezone %}
     {% for post in posts %}
         <h3>{{ post.title }}</h3>
@@ -487,7 +433,7 @@ Say we want to render the datetime object, `post.created_at` in the timezone of 
 First approach:
 
 ```html
-{% load utz %}
+{% load django_utz %}
 {% usertimezone posts[0].author %}
     {% for post in posts %}
         <h3>{{ post.title }}</h3>
@@ -500,7 +446,7 @@ First approach:
 Alternatively;
 
 ```html
-{% load utz %}
+{% load django_utz %}
 {% usertimezone user=posts[0].author %}
     {% for post in posts %}
         <h3>{{ post.title }}</h3>
@@ -512,13 +458,14 @@ Alternatively;
 
 ### Template Filters
 
-There are also template filters that allow you to display datetime objects in the preferred user's local timezone. Available template filters include:
+django_utz also provides a template filter that allows you to display datetime objects in the preferred user's local timezone.
 
 - `usertimezone`: This filter returns a datetime object in the request user's timezone but the preferred user can be passed as an argument.
-Assuming that we want to write a template for our post detail view, we can do this:
+
+Say we want to write a template for our post detail view, we can do this:
 
 ```html
-{% load utz %}
+{% load django_utz %}
 
 <h3>{{ post.title }}</h3>
 <p>{{ post.content }}</p>
@@ -538,124 +485,23 @@ We can also pass the preferred user as an argument:
 <p>{{ post.author }}</p>
 ```
 
-## Utilities
-
-### The `django_utz.utils` module
-
-The `django_utz.utils` module contains utility functions that can be used when handling timezone/datetime related activities.
-Some of these functions include:
-
-- `validate_timezone(value)`: This is a validator function that validates a timezone name or timezone info object. It raises a ValidationError if the value is not a valid timezone name or timezone info object.
-
-Simple usage:
-
-```python
-from django_utz.utils import validate_timezone
-
-validate_timezone("Africa/Lagos")
-# No error raised
-# Returns "Africa/Lagos"
-
-validate_timezone("Africa/Lagos1")
-# ValidationError raised
-```
-
-This is intended to be used as a model or serializer field validator.
-
-- `is_timezone_vaild(timezone: str | datetime.tzinfo)`: This is a function that checks if a timezone name or timezone info object is valid. It returns `True` if the timezone is valid and `False` otherwise.
-
-Sample usage:
-
-```python
-from django_utz.utils import is_timezone_valid
-
-is_timezone_valid("Africa/Lagos")
-# Returns True
-
-is_timezone_valid("Africa/Lagos1")
-# Returns False
-```
-
-- `get_attr_by_traversal(obj: object, traversal_path: str, default=None)`: This is a function that returns the value of an attribute of an object by traversing the object's attributes using the traversal path. It returns the value of the attribute if found and `default` otherwise.
-
-Sample usage:
-
-```python
-from django_utz.utils import get_attr_by_traversal
-
-class A:
-    def __init__(self, b):
-        self.b = b
-
-class B:
-    def __init__(self, c):
-        self.c = c
-
-class C:
-    def __init__(self, d):
-        self.d = d
-
-obj = A(B(C("Hello World")))
-print(get_attr_by_traversal(obj, "b.c.d"))
-# Prints: Hello World
-```
-
-- `is_datetime_field(model: models.Model, field_name: str)`: This is a function that checks if a field in a model is a datetime field. It returns `True` if the field is a datetime field and `False` otherwise.
-
-Sample usage:
-
-```python
-from my_app.models import Post
-from django_utz.utils import is_datetime_field
-
-is_datetime_field(Post, "created_at")
-# Returns True
-
-is_datetime_field(Post, "title")
-# Returns False
-```
-
-- `is_time_field(model: models.Model, field_name: str)`: This is a function that checks if a field in a model is a time field. It returns `True` if the field is a time field and `False` otherwise.
-
-Sample usage:
-
-```python
-from my_app.models import Post
-from django_utz.utils import is_time_field
-
-is_time_field(Post, "created_at")
-# Returns False
-```
-
-- `is_date_field(model: models.Model, field_name: str)`: This is a function that checks if a field in a model is a date field. It returns `True` if the field is a date field and `False` otherwise.
-
-Sample usage:
-
-```python
-from my_app.models import Post
-from django_utz.utils import is_date_field
-
-is_date_field(Post, "created_at")
-# Returns False
-```
-
-### The `utzdatetime` object
+## The `utzdatetime` object
 
 This is a custom datetime that can be independent of settings.USE_TZ. It inherits from `datetime.datetime`. The reason this exists is because when USE_TZ is set to True, sometimes, datetime objects are converted back to the server's timezone. This can be a problem when you want to view datetime objects in a timezone other than the server's timezone.
 
-A peculiar case is in templates. If you try to access say, `post.created_at_utz` in a template, you'd get the datetime object in the server's timezone. This is because the datetime object is converted back to the server's timezone when USE_TZ is set to True. Hence, a `utzdatetime` is returned by the `to_local_timezone` method of the `UTZUserModelMixin` mixin.
+A peculiar case is in templates. If you try to access say, `post.created_at_utz` in a template, you'd get the datetime object in the server's timezone. This is because the datetime object is converted back to the server's timezone when USE_TZ is set to True. Hence, the reason why a `utzdatetime` is used.
 
 This object is timezone aware and can be used to display datetime objects in any timezone.
 
 > This concept was gotten from `django.templatetags.tz`'s `datetimeobject`.
 
-#### Custom Methods
+The `utzdatetime` object has the following methods:
 
 - `from_datetime(cls, _datetime: datetime.datetime)`: This class method allows the construction of a `utzdatetime` object from a datetime object.
 
 ```python
 import datetime
-from django_utz.utils import utzdatetime
+from django_utz.datetime import utzdatetime
 
 normal_datetime = datetime.datetime.now()
 utz_datetime = utzdatetime.from_datetime(normal_datetime)
@@ -675,4 +521,4 @@ utz_datetime.disregard_usetz()
 # Now the utzdatetime object is independent of settings.USE_TZ
 ```
 
-**Contributions and feedbacks are welcome. For feedbacks, please open an issue. To contribute, please fork the repo and submit a pull request. If you find this module useful, please consider giving it a star. Thanks!**
+**Contributions and feedbacks are welcome. For feedbacks, please open an issue. To contribute, please fork the repo and submit a pull request. Thanks!**
