@@ -1,4 +1,5 @@
 """django_utz template tags and filters"""
+
 from typing import Dict, List
 from django.template.base import Parser, Token, Node, FilterExpression, kwarg_re
 from django.template import Library, TemplateSyntaxError, NodeList
@@ -6,12 +7,12 @@ from django.conf import settings
 from django.utils import timezone
 import datetime
 
-from django_utz.models.mixins import UTZUserModelMixin
-from django_utz.middleware import get_request_user
-
+from ..middleware import get_request_user
+from ..decorators.models import UserModelUTZMixin
 
 register = Library()
 _generic_name = "usertimezone"
+
 
 def parse_tag(token: Token, parser: Parser):
     """
@@ -22,7 +23,7 @@ def parse_tag(token: Token, parser: Parser):
     tag_name is a string, the name of the tag.
 
     args is a list of FilterExpressions, from all the arguments that didn't look like kwargs,
-    in the order they occurred, including any that were mingled amongst kwargs.
+    in the order they occurred, including any that were amongst kwargs.
 
     kwargs is a dictionary mapping kwarg names to FilterExpressions, for all the arguments that
     looked like kwargs, including any that were mingled amongst args.
@@ -48,14 +49,19 @@ def parse_tag(token: Token, parser: Parser):
     return tag_name, args, kwargs
 
 
+
 class UTZNode(Node):
-    """Node to render the template content in the user's timezone"""
+    """
+    Node to render the datetimes in template content 
+    in the preferred user's timezone.
+    """
     def __init__(
-            self, nodelist: NodeList, 
+            self, 
+            nodelist: NodeList, 
             args: List[FilterExpression], 
             kwargs: Dict[str, FilterExpression], 
             tag_name: str
-        ):
+        ) -> None:
         self.nodelist = nodelist
         self.user = self.get_user(args, kwargs, tag_name)
         self.tag_name = tag_name
@@ -66,15 +72,16 @@ class UTZNode(Node):
         args: List[FilterExpression], 
         kwargs: Dict[str, FilterExpression], 
         tag_name: str
-        ):
+    ) -> FilterExpression | None:
         """
-        Get the user object from the arguments and keyword arguments passed to the template tag.
+        Get the user object from the arguments and 
+        keyword arguments passed to the utz template tag.
         """
         if args:
             if len(args) != 1:
                 raise TemplateSyntaxError(
                     f"{tag_name} requires exactly one argument. The user object\
-                    whose timezone is to be used to render the template content."
+                    whose timezone is to be used in rendering the template content."
                 )
             user = args[0]
         else:
@@ -83,32 +90,37 @@ class UTZNode(Node):
 
 
     def render(self, context):
-        user = context.get("request").user
+        request_user = context.get("request").user
         if self.user:
             preferred_user = self.user.resolve(context)
-        user = preferred_user if preferred_user else user
+        user = preferred_user if preferred_user else request_user
 
-        if user.is_authenticated and issubclass(user.__class__, UTZUserModelMixin):
+        utz_meta = getattr(user, "UTZMeta", None)
+        user_model_is_decorated = utz_meta and utz_meta._decorated and issubclass(user.__class__, UserModelUTZMixin)
+        if user.is_authenticated and user_model_is_decorated:
             tz = user.utz
+            original_timezone = timezone.get_current_timezone()
+            try:
+                timezone.activate(tz)
+                output = self.nodelist.render(context)
+            finally:
+                timezone.activate(original_timezone)
         else:
-            tz = settings.TIME_ZONE if settings.USE_TZ else "UTC"
-
-        original_timezone = timezone.get_current_timezone()
-        try:
-            timezone.activate(tz)
             output = self.nodelist.render(context)
-        finally:
-            timezone.activate(original_timezone)
+
         return output
+
 
 
 @register.tag(name=_generic_name)
 def utz_tag(parser: Parser, token: Token):
     """
-    Template tag to render the template content in the preferred user's timezone.
+    Template tag to render datetimes in the template content 
+    in the preferred user's timezone.
 
     #### In your template:
-    To render the template content in the timezone of the user object passed as an argument:
+    To render datetimes in the template content in the timezone 
+    of the user object passed as an argument:
     ```
     {% load utz %}
     {% usertimezone user=object.user %}
@@ -125,27 +137,26 @@ def utz_tag(parser: Parser, token: Token):
     ```
     """
     tag_name, args, kwargs = parse_tag(token, parser)
-    nodelist = parser.parse((f"end{_generic_name}",))
+    nodelist = parser.parse(parse_until=(f"end{_generic_name}",))
     parser.delete_first_token()
     return UTZNode(nodelist, args, kwargs, tag_name)
 
 
+
 @register.filter(name=_generic_name)
-def utz_filter(value: datetime.datetime, user: UTZUserModelMixin = None):
+def utz_filter(value: datetime.datetime, user: UserModelUTZMixin = None):
     """
-    Filter to convert a datetime object to the user's timezone.
+    Filter to convert a datetime object to the request/provided user's timezone.
 
     If the user is not authenticated or the user model is not a subclass of UTZUserModelMixin,
     the value is returned as is.
-
-    An optional user object can be passed as an argument to the filter.
 
     #### In your template:
     ```
     {% load utz %}
     {{ datetime_object|usertimezone }}
     ```
-    A specific user whose timezone would be used can also be provided:
+    A specific user whose timezone would be used, can also be provided:
     ```
     {% load utz %}
     {{ datetime_object|usertimezone:user }}
@@ -153,11 +164,14 @@ def utz_filter(value: datetime.datetime, user: UTZUserModelMixin = None):
     """
     if not user: # If no user is provided, use the request user
         user = get_request_user()
-    # If the user model is not a subclass of UTZUserModelMixin, return the value as is
-    if not issubclass(user.__class__, UTZUserModelMixin):
+    
+    utz_meta = getattr(user, "UTZMeta", None)
+    is_decorated = utz_meta and utz_meta._decorated and issubclass(user.__class__, UserModelUTZMixin)
+    # If the user model was not decorated with the `usermodel` decorator, return the value as is
+    if not is_decorated:
         return value
     try:
         return user.to_local_timezone(value)
-    except Exception:
+    except:
         return value
     

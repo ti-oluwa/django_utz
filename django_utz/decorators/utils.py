@@ -1,16 +1,19 @@
-"""Utility functions/classes for django_utz"""
+"""Utility functions for `django_utz` decorators"""
 try:
     import zoneinfo
 except:
     from backports import zoneinfo
+from typing import Any, Callable
 import pytz
 import datetime
-from django.utils import timezone
 from django.db import models
 from django.core.exceptions import ValidationError
+import functools
+
+from .bases import UTZDecorator
 
 
-def validate_timezone(value):
+def validate_timezone(value: Any) -> str | datetime.tzinfo:
     """
     Validator to check if a timezone is valid.
 
@@ -23,7 +26,7 @@ def validate_timezone(value):
     return value
 
 
-def is_timezone_valid(timezone: str | datetime.tzinfo):
+def is_timezone_valid(timezone: str | datetime.tzinfo) -> bool:
     """
     Returns whether timezone is a valid timezone.
 
@@ -47,7 +50,7 @@ def is_timezone_valid(timezone: str | datetime.tzinfo):
     return is_pytz or is_zoneinfo
 
 
-def get_attr_by_traversal(obj: object, traversal_path: str, default=None):
+def get_attr_by_traversal(obj: object, traversal_path: str, default=None) -> object | Any | None:
     """
     Get an attribute of an object by traversing the object using the traversal path.
     
@@ -85,7 +88,7 @@ def get_attr_by_traversal(obj: object, traversal_path: str, default=None):
         return default
 
 
-def is_datetime_field(model: models.Model, field_name: str):
+def is_datetime_field(model: type[models.Model], field_name: str) -> bool:
     """
     Checks if the given field name is a datetime field in the model.
 
@@ -97,7 +100,7 @@ def is_datetime_field(model: models.Model, field_name: str):
     return issubclass(field.__class__, models.DateTimeField)
 
 
-def is_time_field(model: models.Model, field_name: str):
+def is_time_field(model: type[models.Model], field_name: str) -> bool:
     """
     Checks if the given field name is a time field in the model.
 
@@ -109,7 +112,7 @@ def is_time_field(model: models.Model, field_name: str):
     return issubclass(field.__class__, models.TimeField)
 
 
-def is_date_field(model: models.Model, field_name: str):
+def is_date_field(model: type[models.Model], field_name: str) -> bool:
     """
     Checks if the given field name is a date field in the model.
 
@@ -121,35 +124,21 @@ def is_date_field(model: models.Model, field_name: str):
     return issubclass(field.__class__, models.DateField)
 
 
-class utzdatetime(datetime.datetime):
-    """Custom datetime class that can be independent of settings.USE_TZ"""
-    convert_to_local_time = False
 
-    @classmethod
-    def from_datetime(cls, _datetime: datetime.datetime):
-        """Returns a utzdatetime object from a datetime.datetime object"""
-        if not isinstance(_datetime, datetime.datetime):
-            raise TypeError(f"_datetime expected datetime.datetime object, got {type(_datetime)}")
-        if timezone.is_naive(_datetime):
-            default_timezone = timezone.get_default_timezone()
-            _datetime = timezone.make_aware(_datetime, default_timezone)
-        return cls(
-            year=_datetime.year,
-            month=_datetime.month,
-            day=_datetime.day,
-            hour=_datetime.hour,
-            minute=_datetime.minute,
-            second=_datetime.second,
-            microsecond=_datetime.microsecond,
-            tzinfo=_datetime.tzinfo
-        )
+def transform_utz_decorator(decorator: type[UTZDecorator]) -> Callable[[type[object]], type[object]]:
+    """
+    Transforms class type utz decorator to a function type decorator.
 
-    def regard_usetz(self):
-        """Respect settings.USE_TZ when converting to local time"""
-        self.convert_to_local_time = True
-        return self
+    Using a utz decorator directly on a class will require that the class be instantiated
+    before the decorator logic is applied. This is not ideal as the decorator logic should be
+    applied to the decorated class itself and a modified class should be returned.
 
-    def disregard_usetz(self):
-        """Remain unaffected by settings.USE_TZ when converting to local time"""
-        self.convert_to_local_time = False
-        return self
+    A decorator wrapper function is returned that takes a class, applies the wrapped utz decorator logic,
+    and returns the modified class.
+    """
+    @functools.wraps(decorator)
+    def decorator_wrapper(cls: type[object]) -> type[object]:
+        """Wrapper function that applies the utz decorator to the decorated class."""
+        return decorator(cls)()
+    
+    return decorator_wrapper
