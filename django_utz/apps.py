@@ -5,5 +5,5 @@ class DjangoUtzConfig(AppConfig):
     name = 'django_utz'
 
     def ready(self) -> None:
-        import django_utz.models.signals
+        import django_utz.signals
         return super().ready()
