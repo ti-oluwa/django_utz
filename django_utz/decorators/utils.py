@@ -3,7 +3,7 @@ try:
     import zoneinfo
 except:
     from backports import zoneinfo
-from typing import Any, Callable
+from typing import Any, Callable, TypeVar
 import pytz
 import datetime
 from django.db import models
@@ -125,7 +125,10 @@ def is_date_field(model: type[models.Model], field_name: str) -> bool:
 
 
 
-def transform_utz_decorator(decorator: type[UTZDecorator]) -> Callable[[type[object]], type[object]]:
+Class = TypeVar("Class", bound=type[object])
+
+
+def transform_utz_decorator(decorator: type[UTZDecorator]) -> Callable[[Class], Class]:
     """
     Transforms class type utz decorator to a function type decorator.
 
@@ -137,7 +140,7 @@ def transform_utz_decorator(decorator: type[UTZDecorator]) -> Callable[[type[obj
     and returns the modified class.
     """
     @functools.wraps(decorator)
-    def decorator_wrapper(cls: type[object]) -> type[object]:
+    def decorator_wrapper(cls: Class) -> Class:
         """Wrapper function that applies the utz decorator to the decorated class."""
         return decorator(cls)()
     
