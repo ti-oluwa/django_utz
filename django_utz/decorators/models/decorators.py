@@ -8,7 +8,7 @@ try:
     import zoneinfo
 except:
     from backports import zoneinfo
-from django.contrib.auth.models import AbstractUser, AbstractBaseUser, User
+from django.contrib.auth.models import AbstractBaseUser
 from typing import TypeVar, List
 from django.core.exceptions import FieldDoesNotExist
 from typing import Callable
@@ -17,7 +17,7 @@ from typing import Callable
 from ..utils import is_datetime_field, is_timezone_valid, validate_timezone, transform_utz_decorator
 from ...datetime import utzdatetime
 from .exceptions import ModelError, ModelConfigurationError
-from .bases import ModelDecorator
+from .bases import ModelDecorator, DjangoModel
 from .utils import get_user, is_user_model, FunctionAttribute
 
 
@@ -72,8 +72,9 @@ class UserModelUTZMixin:
         return utz_dt
 
 
-UserModel = TypeVar("UserModel", AbstractBaseUser, AbstractUser, User)
-UTZUserModel = TypeVar("UTZUserModel", AbstractBaseUser, AbstractUser, User, UserModelUTZMixin)
+
+UserModel = TypeVar("UserModel", bound=AbstractBaseUser)
+UTZUserModel = TypeVar("UTZUserModel", bound=type[AbstractBaseUser | UserModelUTZMixin])
 
 
 class UserModelDecorator(ModelDecorator):
@@ -89,7 +90,7 @@ class UserModelDecorator(ModelDecorator):
         """Ensures that the model in which this mixin is used is the project's user model"""
         if not is_user_model(model):
             raise ModelError(f"Model '{model.__name__}' is not the project's user model")  
-        return super().check_model(model)
+        return super().check_model(model) 
     
 
     def validate_timezone_field(self, value: str) -> None:
@@ -118,7 +119,7 @@ class RegularModelDecorator(ModelDecorator):
     all_configs = ("datetime_fields", "attribute_suffix", "use_related_user_timezone", "related_user")
     required_configs = ("datetime_fields",)
 
-    def check_model(self, model: models.Model) -> models.Model:
+    def check_model(self, model: DjangoModel) -> DjangoModel:
         model = super().check_model(model)
 
         related_user = getattr(model.UTZMeta, "related_user", None)
@@ -127,7 +128,7 @@ class RegularModelDecorator(ModelDecorator):
         return model
     
 
-    def prepare_model(self) -> type[models.Model]:
+    def prepare_model(self) -> DjangoModel:
         if self.get_config("datetime_fields") == "__all__":
             self.set_config("datetime_fields", self.get_datetime_fields(self.model))
 
@@ -160,7 +161,7 @@ class RegularModelDecorator(ModelDecorator):
         return None
     
 
-    def get_datetime_fields(self, model: type[models.Model]) -> List[str]:
+    def get_datetime_fields(self, model: DjangoModel) -> List[str]:
         """Returns the datetime fields in the given model."""
         return [field.name for field in model._meta.fields if isinstance(field, models.DateTimeField)]
     
@@ -172,7 +173,7 @@ class RegularModelDecorator(ModelDecorator):
 
         :param datetime_field: The name of the datetime field for which to make the function
         """
-        func_name = f"get_{datetime_field}_{self.get_config("attribute_suffix")}"
+        func_name = f"get_{datetime_field}_{self.get_config('attribute_suffix')}"
 
         def func(model_instance: models.Model) -> utzdatetime:
             user: UserModel = get_user(model_instance)
@@ -185,7 +186,7 @@ class RegularModelDecorator(ModelDecorator):
         return func
             
 
-    def update_model_attrs(self, model: type[models.Model]) -> type[models.Model]:
+    def update_model_attrs(self, model: DjangoModel) -> DjangoModel:
         """
         Updates the model with the read-only attributes for the datetime fields.
 
@@ -208,7 +209,7 @@ class RegularModelDecorator(ModelDecorator):
 
 # Function-type decorator for django models
 
-def model(model: type[models.Model]) -> type[models.Model]:
+def model(model: DjangoModel) -> DjangoModel:
     """
     #### `django_utz` decorator for django models.
 

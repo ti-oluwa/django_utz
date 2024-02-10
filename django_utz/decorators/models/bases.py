@@ -1,12 +1,13 @@
 from abc import ABC, abstractmethod
 import inspect
-from typing import Any
+from typing import Any, TypeVar
 from django.db import models
 from django.db import models
 
 from ..bases import UTZDecorator
 from .exceptions import ModelConfigurationError
 
+DjangoModel = TypeVar("DjangoModel", bound=models.Model)
 
 
 class ModelDecorator(UTZDecorator, ABC):
@@ -17,19 +18,19 @@ class ModelDecorator(UTZDecorator, ABC):
     required_configs = ()
     __slots__ = ("model",)
 
-    def __init__(self, model: type[models.Model]) -> None:
+    def __init__(self, model: DjangoModel) -> None:
         self.model = self.check_model(model)
         super().__init__()
     
 
-    def __call__(self) -> type[models.Model]:
+    def __call__(self) -> DjangoModel:
         prepared_model = self.prepare_model()
         if not issubclass(prepared_model, models.Model):
             raise TypeError("prepare_model method must return a model")
         return prepared_model
 
 
-    def check_model(self, model: type[models.Model]) -> type[models.Model]:
+    def check_model(self, model: DjangoModel) -> DjangoModel:
         """
         Check if model and model configuration is valid. Returns the model if it is valid.
 
@@ -54,7 +55,7 @@ class ModelDecorator(UTZDecorator, ABC):
 
 
     @abstractmethod
-    def prepare_model(self) -> type[models.Model]:
+    def prepare_model(self) -> DjangoModel:
         """
         Prepare the model for use. This where you can customize the model.
 

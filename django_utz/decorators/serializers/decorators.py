@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.db import models
-from typing import Any, Dict
+from typing import Any, Dict, TypeVar
 import inspect
 import datetime
 
@@ -9,7 +9,9 @@ from ..utils import transform_utz_decorator
 from ..models.exceptions import ModelError
 from .exceptions import SerializerConfigurationError
 from ...serializer_fields import UTZDateTimeField
+from ..models.bases import DjangoModel
 
+DRFModelSerializer = TypeVar("DRFModelSerializer", bound=serializers.ModelSerializer)
 
 
 class ModelSerializerDecorator(UTZDecorator):
@@ -18,27 +20,27 @@ class ModelSerializerDecorator(UTZDecorator):
     required_configs = ("auto_add_fields",)
     __slots__ = ("serializer",)
 
-    def __init__(self, serializer: type[serializers.ModelSerializer]) -> None:
+    def __init__(self, serializer: DRFModelSerializer) -> None:
         self.serializer = self.check_model_serializer(serializer)
         super().__init__()
 
 
     @property
-    def serializer_model(self) -> type[models.Model]:
+    def serializer_model(self) -> DjangoModel:
         """
         Returns the serializer's model.
         """
         return self.serializer.Meta.model
     
     
-    def __call__(self) -> type[models.Model]:
+    def __call__(self) -> DRFModelSerializer:
         prepared_serializer = self.prepare_serializer()
         if not issubclass(prepared_serializer, serializers.ModelSerializer):
             raise TypeError("prepare_serializer method must return a model serializer")
         return prepared_serializer
     
 
-    def check_model_serializer(self, serializer: type[serializers.ModelSerializer]) -> type[serializers.ModelSerializer]:
+    def check_model_serializer(self, serializer: DRFModelSerializer) -> DRFModelSerializer:
         """
         Check if the model serializer is properly setup.
 
@@ -85,7 +87,7 @@ class ModelSerializerDecorator(UTZDecorator):
         return None
 
 
-    def prepare_serializer(self) -> type[serializers.ModelSerializer]:
+    def prepare_serializer(self) -> DRFModelSerializer:
         """
         Prepare the serializer for use. This where you can customize the serializer.
 
@@ -171,9 +173,10 @@ class ModelSerializerDecorator(UTZDecorator):
         return val
 
 
+
 # Funtion-type decorator for `rest_framework.serializers.ModelSerializer` classes
 
-def modelserializer(serializer: type[serializers.ModelSerializer]) -> type[serializers.ModelSerializer]:
+def modelserializer(serializer: DRFModelSerializer) -> DRFModelSerializer:
     """
     #### `django_utz` decorator for `reest_framework.serializers.ModelSerializer` classes.
 

@@ -3,12 +3,15 @@
 from typing import Dict, List
 from django.template.base import Parser, Token, Node, FilterExpression, kwarg_re
 from django.template import Library, TemplateSyntaxError, NodeList
-from django.conf import settings
 from django.utils import timezone
 import datetime
 
+from django.utils.safestring import SafeText
+
 from ..middleware import get_request_user
 from ..decorators.models import UserModelUTZMixin
+from ..datetime import utzdatetime
+
 
 register = Library()
 _generic_name = "usertimezone"
@@ -89,10 +92,9 @@ class UTZNode(Node):
         return user
 
 
-    def render(self, context):
+    def render(self, context) -> SafeText:
         request_user = context.get("request").user
-        if self.user:
-            preferred_user = self.user.resolve(context)
+        preferred_user = self.user.resolve(context) if self.user else None
         user = preferred_user if preferred_user else request_user
 
         utz_meta = getattr(user, "UTZMeta", None)
@@ -113,7 +115,7 @@ class UTZNode(Node):
 
 
 @register.tag(name=_generic_name)
-def utz_tag(parser: Parser, token: Token):
+def utz_tag(parser: Parser, token: Token) -> UTZNode:
     """
     Template tag to render datetimes in the template content 
     in the preferred user's timezone.
@@ -144,7 +146,7 @@ def utz_tag(parser: Parser, token: Token):
 
 
 @register.filter(name=_generic_name)
-def utz_filter(value: datetime.datetime, user: UserModelUTZMixin = None):
+def utz_filter(value: datetime.datetime, user: UserModelUTZMixin = None) -> datetime.datetime | utzdatetime:
     """
     Filter to convert a datetime object to the request/provided user's timezone.
 

@@ -88,7 +88,7 @@ The possible configurations for each decorator will be discussed in the next sec
 
 ### The `usermodel` decorator
 
-The `usermodel` decorator is used to decorate the project's User model. This decorator adds timezone support to the User model. It adds a property to the User model that returns the user's timezone info as a zoneinfo.ZoneInfo or pytz.tzinfo object. It also adds a method to the User model that converts a datetime object to the user's local timezone and returns a `utzdatetime` object.
+The `usermodel` decorator is used to decorate the project's User model. This decorator basically adds django_utz support to the project. It adds a property to the User model that returns the user's timezone info as a zoneinfo.ZoneInfo or pytz.tzinfo object. It also adds a method to the User model that converts a datetime object to the user's local timezone and returns a `utzdatetime` object.
 
 Let's look at an example of how you would use the `usermodel` decorator:
 
@@ -179,7 +179,7 @@ In the above example, we can see that the current time in the user's timezone is
 
 ### The `model` decorator
 
-The `model` decorator is used to decorate regular django models. This decorator allows you to access datetime fields in the model in a user's local timezone. The user can be the request user or any specified user. By default, the request user is used.
+The `model` decorator is used to decorate regular django models. This decorator allows you to access model datetime fields in a user's local timezone. The user can be the request user or any specified user. By default, the request user is used.
 
 Curious about how this works? To keep things simple, the decorator uses a kind of descriptor called the `FunctionAttribute` descriptor to add a new version of each datetime field to the model class. This new version of the datetime field is suffixed with "utz"(by default) and is a property that returns the datetime field in the user's local timezone.
 
@@ -239,6 +239,7 @@ To define explicitly the user whose timezone will be used, you can set this comf
 Looks complicated? Let's look at two examples:
 
 **Example 1:**
+
 Assume we want all datetime fields in the `Post` model to always be returned in the post author's timezone. We can do this:
 
 ```python
@@ -264,7 +265,7 @@ class Post(models.Model):
 
 So no matter the user that makes the request, the datetime fields in the `Post` model will always be returned in the post author's timezone.
 
-You could also decide to not specify the `related_user` configuration. django_utz will use the first user it finds in the related models of the model. Which is the `author` in this case.**
+You could also decide to not specify the `related_user` configuration. django_utz will use the first user it finds in the related models of the model. Which is the `author` in this case.
 
 **Example 2:**
 
