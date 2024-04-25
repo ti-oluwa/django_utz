@@ -28,6 +28,7 @@ Add `django_utz.middleware.DjangoUTZMiddleware` to `MIDDLEWARE`
 ```python
 MIDDLEWARE = [
     ...,
+    'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django_utz.middleware.DjangoUTZMiddleware',
 ]
 ```

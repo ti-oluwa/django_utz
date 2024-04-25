@@ -27,7 +27,6 @@ def is_user_model(model: type[models.Model]) -> bool:
     return get_project_user_model() == get_model_traversal_path(model)
 
 
-
 class FunctionAttribute:
     """
     A descriptor class that returns the result of 
@@ -47,7 +46,6 @@ class FunctionAttribute:
 
     def __get__(self, obj, objtype):
         return self.func(obj)
-
 
 
 def get_user(model_obj: models.Model) -> models.Model | None:
@@ -92,7 +90,6 @@ def get_user(model_obj: models.Model) -> models.Model | None:
     return user
 
 
-
 def find_user_field(model: type[models.Model]) -> str | None:
     """
     Finds and returns the traversal path to the first user field found
@@ -101,12 +98,21 @@ def find_user_field(model: type[models.Model]) -> str | None:
     This method assumes that the user is a foreign key or one-to-one field.
     """
     field_paths = []
-
+    
     def find_user_related_field(model: type[models.Model]) -> str | None:
         """
         Finds and returns the user related field traversal path 
         in the given model or its related models.
         """
+        # First check all the fields in the model for the user field
+        # If the user field is found, return the field path (Surface-level search)
+        for field in model._meta.fields:
+            if not is_user_model(field.related_model):
+                continue
+            field_paths.append(field.name)
+            return ".".join(field_paths)
+
+        # If the user field was not found at surface level, check each field's related model (if any).
         for field in model._meta.fields:
             related_model = field.related_model
             if related_model and isinstance(field, (models.ForeignKey, models.OneToOneField)):
@@ -115,9 +121,13 @@ def find_user_field(model: type[models.Model]) -> str | None:
                 if is_user_model(related_model):
                     return ".".join(field_paths)
                 else:
-                    # if the field is not the user model, recursively check the field's related_model for the user field
-                    return find_user_related_field(related_model)  
-        field_paths.pop()
-        return None
-            
+                    # If the field is not the user field, recursively check the field's 
+                    # related model for the user field, both at surface level and in its related models (if any).
+                    return find_user_related_field(related_model) 
+                
+        # If the user field was not found in the model or its related models, pop the last field path and return. 
+        if field_paths:
+            field_paths.pop()
+        return
+         
     return find_user_related_field(model)
