@@ -1,12 +1,10 @@
 from django.db import models
 import pytz
 import datetime
-from django.db import models
 from django.conf import settings
-
 try:
     import zoneinfo
-except:
+except ImportError:
     from backports import zoneinfo
 from django.contrib.auth.models import AbstractBaseUser
 from typing import TypeVar, List
@@ -18,12 +16,12 @@ from ..utils import is_datetime_field, is_timezone_valid, validate_timezone, tra
 from ...datetime import utzdatetime
 from .exceptions import ModelError, ModelConfigurationError
 from .bases import ModelDecorator, DjangoModel
-from .utils import get_user, is_user_model, FunctionAttribute
+from .utils import get_user, is_user_model, FunctionAttribute, get_datetime_fields
 
 
 
 class UserModelUTZMixin:
-    """Adds neccessary methods and properties to the User Model"""
+    """Adds necessary utz methods and properties to a User Model"""
     
     @property
     def utz(self):
@@ -43,7 +41,7 @@ class UserModelUTZMixin:
                 raise ValueError(f"Invalid timezone: {utz}.")
             zone_str = utz
 
-        if getattr(settings, "USE_DEPRECATED_PYTZ", False):
+        if getattr(settings, "USE_DEPRECATED_PYTZ", False) is True:
             return pytz.timezone(zone_str)
 
         return zoneinfo.ZoneInfo(zone_str)
@@ -89,7 +87,10 @@ class UserModelDecorator(ModelDecorator):
     def check_model(self, model: UserModel) -> UserModel:
         """Ensures that the model in which this mixin is used is the project's user model"""
         if not is_user_model(model):
-            raise ModelError(f"Model '{model.__name__}' is not the project's user model")  
+            raise ModelError(
+                f"Model '{model.__name__}' is not the project's user model"
+                "Ensure that the decorated model is the one defined in settings.AUTH_USER_MODEL"
+            )  
         return super().check_model(model) 
     
 
@@ -130,7 +131,7 @@ class RegularModelDecorator(ModelDecorator):
 
     def prepare_model(self) -> DjangoModel:
         if self.get_config("datetime_fields") == "__all__":
-            self.set_config("datetime_fields", self.get_datetime_fields(self.model))
+            self.set_config("datetime_fields", get_datetime_fields(self.model))
 
         if not self.get_config("attribute_suffix"):
             self.set_config("attribute_suffix", "utz")
@@ -144,7 +145,7 @@ class RegularModelDecorator(ModelDecorator):
     def validate_datetime_fields(self, value: str | List[str] | tuple[str]) -> None:
         if value != "__all__" and not isinstance(value, (list, tuple)):
             raise ModelConfigurationError(
-                f"'datetime_fields' should be a list, tuple or '__all__'"
+                "'datetime_fields' should be a list, tuple or '__all__'"
             )
         return None
     
@@ -161,11 +162,6 @@ class RegularModelDecorator(ModelDecorator):
         return None
     
 
-    def get_datetime_fields(self, model: DjangoModel) -> List[str]:
-        """Returns the datetime fields in the given model."""
-        return [field.name for field in model._meta.fields if isinstance(field, models.DateTimeField)]
-    
-
     def make_func_for_field(self, datetime_field: str) -> Callable[[models.Model], utzdatetime]:
         """
         Makes and returns a function that returns the value of the datetime field on a model instance
@@ -176,7 +172,7 @@ class RegularModelDecorator(ModelDecorator):
         func_name = f"get_{datetime_field}_{self.get_config('attribute_suffix')}"
 
         def func(model_instance: models.Model) -> utzdatetime:
-            user: UserModel = get_user(model_instance)
+            user: UTZUserModel | None = get_user(model_instance)
             if user is None:
                 return utzdatetime.from_datetime(getattr(model_instance, datetime_field))
             return user.to_local_timezone(getattr(model_instance, datetime_field))

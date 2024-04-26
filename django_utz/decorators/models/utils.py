@@ -1,10 +1,9 @@
-from typing import Callable
+from typing import Callable, List, Any
 from django.db import models
 from django.conf import settings
 
 from ..utils import get_attr_by_traversal
 from ...middleware import get_request_user
-from ...datetime import utzdatetime
 from .exceptions import ModelError, ModelConfigurationError
 
 
@@ -32,7 +31,7 @@ class FunctionAttribute:
     A descriptor class that returns the result of 
     passing an object into a function as an attribute.
     """
-    def __init__(self, func: Callable[..., utzdatetime]):
+    def __init__(self, func: Callable[..., Any]):
         if not callable(func):
             raise TypeError("Value must be a function.")
         self.func = func
@@ -72,7 +71,7 @@ def get_user(model_obj: models.Model) -> models.Model | None:
             if not related_user:
                 if getattr(model_obj_cls.UTZMeta, "related_user", None):
                     raise ModelConfigurationError(
-                        f"Please set the `related_user` config to the name or traversal path of the user field in {model_obj_cls.__name__}."
+                        f"Make sure to set the `related_user` config to the name or traversal path of the user field in {model_obj_cls.__name__}."
                     )
                 raise ModelError(f"No relation to the User model was found in {model_obj_cls.__name__}")
             
@@ -131,3 +130,8 @@ def find_user_field(model: type[models.Model]) -> str | None:
         return
          
     return find_user_related_field(model)
+
+
+def get_datetime_fields(self, model: type[models.Model]) -> List[str]:
+    """Returns a list of the datetime fields in the given model."""
+    return [field.name for field in model._meta.fields if isinstance(field, models.DateTimeField)]

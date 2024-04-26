@@ -7,7 +7,7 @@ template tags and filters that aid easy conversion of timezone aware fields to a
 @Author: Daniel T. Afolayan (ti-oluwa.github.io)
 """
 
-__version__ = "0.1.9"
+__version__ = "0.2.0"
 __author__ = "Daniel T. Afolayan"
 
 alias = "django-user-timezone"
@@ -16,9 +16,9 @@ try:
     import zoneinfo
 except ImportError:
     from backports import zoneinfo
-except:
+except Exception:
     raise Exception(
         "django_utz couldn't import the zoneinfo module.\
          Perhaps you are on an older version of Python, run `pip install backports.zoneinfo` to continue."
-        )
+    )
 
