@@ -174,6 +174,6 @@ def utz_filter(value: datetime.datetime, user: UserModelUTZMixin = None) -> date
         return value
     try:
         return user.to_local_timezone(value)
-    except:
+    except Exception:
         return value
     

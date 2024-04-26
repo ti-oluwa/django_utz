@@ -1,7 +1,7 @@
 """Utility functions for `django_utz` decorators"""
 try:
     import zoneinfo
-except:
+except ImportError:
     from backports import zoneinfo
 from typing import Any, Callable, TypeVar
 import pytz

@@ -2,7 +2,6 @@ from abc import ABC, abstractmethod
 import inspect
 from typing import Any, TypeVar
 from django.db import models
-from django.db import models
 
 from ..bases import UTZDecorator
 from .exceptions import ModelConfigurationError

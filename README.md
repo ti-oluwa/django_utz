@@ -23,11 +23,12 @@ INSTALLED_APPS = [
 ]
 ```
 
-Add `django_utz.middleware.DjangoUTZMiddleware` to `MIDDLEWARE`
+Add `django_utz.middleware.DjangoUTZMiddleware` to `MIDDLEWARE` just below `AuthenticationMiddleware`:
 
 ```python
 MIDDLEWARE = [
     ...,
+    'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django_utz.middleware.DjangoUTZMiddleware',
 ]
 ```
@@ -387,9 +388,11 @@ class PostSerializer(serializers.ModelSerializer):
 
 ## Signals
 
-The `django_utz.signals` module contains signals that are sent when an event occurs on a user's timezone. The signals are:
+The `django_utz.signals` module contain signals that are sent when an event occurs on a user's timezone. The signals are:
 
 - `user_timezone_changed`: Sent when a user's timezone is updated.
+
+> These signals are disabled by default. To ensure that the signals are sent set `ENABLE_UTZ_SIGNALS` to `True` in your settings.py file.
 
 In your receiver, you can access the user object, its previous timezone and current timezone with the `instance`, `previous_timezone`and `current_timezone` keyword arguments respectively.
 
@@ -398,7 +401,7 @@ from django.dispatch import receiver
 from django_utz.signals import user_timezone_changed
 
 @receiver(user_timezone_changed)
-def user_timezone_changed_receiver(sender, **kwargs):
+def timezone_change_handler(sender, **kwargs):
     old_timezone = kwargs.get("previous_timezone")
     new_timezone = kwargs.get("current_timezone")
     print(old_timezone, new_timezone)

@@ -1,7 +1,7 @@
 from django.contrib.auth import get_user_model
-from django.dispatch import Signal, receiver
+from django.dispatch import Signal
 from django.db.models.signals import pre_save
-
+from django.conf import settings
 
 
 ProjectUserModel = get_user_model()
@@ -12,7 +12,6 @@ user_timezone_changed = Signal()
 # kwargs: instance, previous_timezone, current_timezone
 # ----------------------------------------------------
 
-@receiver(pre_save, sender=ProjectUserModel)
 def utz_change_handler(sender, **kwargs) -> None:
     """Signal handler for user timezone changes"""
     user = kwargs["instance"]
@@ -34,3 +33,10 @@ def utz_change_handler(sender, **kwargs) -> None:
                 current_timezone=current_timezone
             )
     return None
+
+
+# ----------------------------------------------------
+# Connect the signal handler to the user model
+# ----------------------------------------------------
+if getattr(settings, "ENABLE_UTZ_SIGNALS", False) is True:
+    pre_save.connect(utz_change_handler, sender=ProjectUserModel)

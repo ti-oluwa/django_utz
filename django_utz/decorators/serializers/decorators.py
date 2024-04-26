@@ -174,7 +174,7 @@ class ModelSerializerDecorator(UTZDecorator):
 
 
 
-# Funtion-type decorator for `rest_framework.serializers.ModelSerializer` classes
+# Function-type decorator for `rest_framework.serializers.ModelSerializer` classes
 
 def modelserializer(serializer: DRFModelSerializer) -> DRFModelSerializer:
     """
