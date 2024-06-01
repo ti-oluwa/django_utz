@@ -25,7 +25,7 @@ class ModelDecorator(UTZDecorator, ABC):
     def __call__(self) -> DjangoModel:
         prepared_model = self.prepare_model()
         if not issubclass(prepared_model, models.Model):
-            raise TypeError("prepare_model method must return a model")
+            raise TypeError("`prepare_model()` method must return a model")
         return prepared_model
 
 
@@ -41,10 +41,10 @@ class ModelDecorator(UTZDecorator, ABC):
         if not issubclass(model, models.Model):
             raise TypeError(f"{model.__name__} is not a Django model")
         
-        if not hasattr(model, "UTZMeta"):
+        elif not hasattr(model, "UTZMeta"):
             raise AttributeError("Model must have a UTZMeta class")
         
-        if not inspect.isclass(model.UTZMeta):
+        elif not inspect.isclass(model.UTZMeta):
             raise ModelConfigurationError("UTZMeta must be a class")
         
         for config in self.required_configs:

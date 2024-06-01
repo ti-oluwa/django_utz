@@ -49,24 +49,24 @@ class ModelSerializerDecorator(UTZDecorator):
         """
         if not issubclass(serializer, serializers.ModelSerializer):
             raise TypeError(f"'{serializer.__name__}' is not a model serializer")
-        
-        model = serializer.Meta.model
-        utz_meta = getattr(model, "UTZMeta", None)
-        model_is_decorated = utz_meta and utz_meta._decorated and getattr(utz_meta, "datetime_fields", None)
-        if not model_is_decorated:
-            raise ModelError(
-                f"Serializer's model {model.__name__}, has not been decorated with a `ModelDecorator`"
-            )
-        
-        if not hasattr(serializer, "UTZMeta"):
-            raise AttributeError("Model serializer must have a UTZMeta class")
-        
-        if not inspect.isclass(model.UTZMeta):
-            raise SerializerConfigurationError("UTZMeta must be a class")
-        
-        for config in self.required_configs:
-            if not getattr(serializer.UTZMeta, config, None):
-                raise SerializerConfigurationError(f"'{config}' must be set in the model serializer's UTZMeta class")
+        else:
+            model = serializer.Meta.model
+            utz_meta = getattr(model, "UTZMeta", None)
+            model_is_decorated = utz_meta and utz_meta._decorated and getattr(utz_meta, "datetime_fields", None)
+            if not model_is_decorated:
+                raise ModelError(
+                    f"Serializer's model {model.__name__}, has not been decorated with a `ModelDecorator`"
+                )
+            
+            if not hasattr(serializer, "UTZMeta"):
+                raise AttributeError("Model serializer must have a UTZMeta class")
+            
+            if not inspect.isclass(model.UTZMeta):
+                raise SerializerConfigurationError("UTZMeta must be a class")
+            
+            for config in self.required_configs:
+                if not getattr(serializer.UTZMeta, config, None):
+                    raise SerializerConfigurationError(f"'{config}' must be set in the model serializer's UTZMeta class")
         return serializer
     
 

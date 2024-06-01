@@ -7,7 +7,7 @@ template tags and filters that aid easy conversion of timezone aware fields to a
 @Author: Daniel T. Afolayan (ti-oluwa.github.io)
 """
 
-__version__ = "0.2.0"
+__version__ = "0.2.0a"
 __author__ = "Daniel T. Afolayan"
 
 alias = "django-user-timezone"

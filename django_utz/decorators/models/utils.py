@@ -132,6 +132,6 @@ def find_user_field(model: type[models.Model]) -> str | None:
     return find_user_related_field(model)
 
 
-def get_datetime_fields(self, model: type[models.Model]) -> List[str]:
+def get_datetime_fields(model: type[models.Model]) -> List[str]:
     """Returns a list of the datetime fields in the given model."""
     return [field.name for field in model._meta.fields if isinstance(field, models.DateTimeField)]
