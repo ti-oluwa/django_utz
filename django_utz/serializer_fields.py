@@ -73,4 +73,3 @@ class UTZDateTimeField(serializers.DateTimeField):
                 else zoneinfo.ZoneInfo("UTC")
             )
         return super().to_internal_value(value).astimezone(server_timezone)
-

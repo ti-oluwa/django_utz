@@ -106,7 +106,7 @@ def usermodel(user_model: Type[UserModel]) -> Type[UserModel]:
     - `timezone_field`: The name of the timezone field in the model.
 
     Example Usage:
-    ```
+    ```python
     from django.contrib.auth.models import AbstractUser
     from django_utz.decorators import usermodel
 
@@ -133,6 +133,7 @@ def usermodel(user_model: Type[UserModel]) -> Type[UserModel]:
 #################
 
 DEFAULT_ATTRIBUTE_SUFFIX = "utz"
+
 
 def validate_datetime_fields(value: Any) -> None:
     if value != "__all__" and not isinstance(value, (list, tuple)):
@@ -194,7 +195,7 @@ def make_func_for_field(
 
     :param datetime_field: The name of the datetime field for which to make the function
     """
-    suffix = get_model_config(model, 'attribute_suffix')
+    suffix = get_model_config(model, "attribute_suffix")
     func_name = f"get_{datetime_field}_{suffix}"
 
     def func(instance: DjangoModel) -> utzdatetime:
@@ -243,7 +244,7 @@ def model(model: Type[DjangoModel]) -> Type[DjangoModel]:
     - `related_user`: Optional. The name of the related user model if `use_related_user_timezone` is True.
 
     Example Usage:
-    ```
+    ```python
     from django.db import models
     from django_utz.decorators import model
 

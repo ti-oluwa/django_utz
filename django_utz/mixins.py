@@ -14,6 +14,7 @@ from .datetime import utzdatetime
 
 DateTime = TypeVar("DateTime", bound=datetime.datetime)
 
+
 class UserModelUTZMixin:
     """Adds necessary utz methods and properties to a User Model"""
 
@@ -24,7 +25,7 @@ class UserModelUTZMixin:
 
         if settings.USE_DEPRECATED_PYTZ is True, then the user's timezone info is returned as a pytz.tzinfo object.
         Otherwise, it is returned as a zoneinfo.ZoneInfo object.
-        """        
+        """
         tz = getattr(self, self.UTZMeta.timezone_field)
 
         if tz and isinstance(tz, datetime.tzinfo):

@@ -37,6 +37,7 @@ def validate_auto_add_fields(value: Any) -> None:
         raise ConfigurationError("auto_add_fields must be a boolean")
     return None
 
+
 def validate_datetime_format(value: Any) -> None:
     if not isinstance(value, str):
         raise ConfigurationError("datetime_format must be a string")
@@ -56,11 +57,14 @@ SERIALIZER_CONFIG_VALIDATORS = {
 }
 
 get_serializer_config = make_utz_config_getter(SERIALIZER_CONFIG_VALIDATORS)
-set_serializer_config = make_utz_config_setter(SERIALIZER_CONFIGS, SERIALIZER_CONFIG_VALIDATORS)
+set_serializer_config = make_utz_config_setter(
+    SERIALIZER_CONFIGS, SERIALIZER_CONFIG_VALIDATORS
+)
 
 
 def check_serializer_class(
-    serializer_class: Type[DRFModelSerializer], required_configs: Optional[List[str]] = None
+    serializer_class: Type[DRFModelSerializer],
+    required_configs: Optional[List[str]] = None,
 ) -> DRFModelSerializer:
     """
     Check if the model serializer class is properly setup.
@@ -98,7 +102,9 @@ def check_serializer_class(
     return serializer_class
 
 
-def prepare_serializer_class(serializer_class: Type[DRFModelSerializer]) -> Type[DRFModelSerializer]:
+def prepare_serializer_class(
+    serializer_class: Type[DRFModelSerializer],
+) -> Type[DRFModelSerializer]:
     """
     Prepare the serializer class for use. This where you can customize the serializer class.
 
@@ -121,21 +127,22 @@ def prepare_serializer_class(serializer_class: Type[DRFModelSerializer]) -> Type
             if hasattr(serializer_class, fieldname):
                 continue
 
-            extra_kwargs = getattr(
-                serializer_class.Meta, "extra_kwargs", {}
-            ).get(fieldname, {})
+            extra_kwargs = getattr(serializer_class.Meta, "extra_kwargs", {}).get(
+                fieldname, {}
+            )
 
             utzdatetime_field = get_utzdatetime_field(serializer_class, extra_kwargs)
             setattr(serializer_class, fieldname, utzdatetime_field)
-    
+
     return serializer_class
 
 
 def get_utzdatetime_field(
-    serializer_class: Type[DRFModelSerializer], extra_kwargs: Optional[Dict[str, Any]] = None
+    serializer_class: Type[DRFModelSerializer],
+    extra_kwargs: Optional[Dict[str, Any]] = None,
 ) -> UTZDateTimeField:
     """
-    Returns a `UTZDateTimeField` 
+    Returns a `UTZDateTimeField`
     """
     extra_kwargs = extra_kwargs or {}
     datetime_format = get_serializer_config(serializer_class, "datetime_format")
@@ -145,7 +152,9 @@ def get_utzdatetime_field(
     return UTZDateTimeField(**extra_kwargs)
 
 
-def modelserializer(serializer_class: Type[DRFModelSerializer]) -> Type[DRFModelSerializer]:
+def modelserializer(
+    serializer_class: Type[DRFModelSerializer],
+) -> Type[DRFModelSerializer]:
     """
     Model serializer class decorator
 

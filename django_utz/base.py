@@ -6,6 +6,7 @@ from .exceptions import ConfigurationError
 Validator = Callable[[Any], None]
 D = TypeVar("D")
 
+
 def make_utz_config_getter(validators: Optional[Dict[str, Validator]] = None):
     """
     Create a getter function for getting configuration values from a utz decorated class.
@@ -30,7 +31,7 @@ def make_utz_config_getter(validators: Optional[Dict[str, Validator]] = None):
         if value is not None and validator:
             validator(value)
         return value
-    
+
     return getter
 
 
