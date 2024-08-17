@@ -1,17 +1,16 @@
-"""django_utz template tags and filters"""
+"""`django_utz` template tags and filters"""
 
-from typing import Dict, List
+from typing import Dict, List, Optional
+import datetime
 from django.template.base import Parser, Token, Node, FilterExpression, kwarg_re
 from django.template import Library, TemplateSyntaxError, NodeList
 from django.utils import timezone
-import datetime
-
 from django.utils.safestring import SafeText
 
 from ..middleware import get_request_user
 from ..decorators.models import UserModelUTZMixin
 from ..datetime import utzdatetime
-
+from ..decorators.models import get_user_model_config
 
 register = Library()
 _generic_name = "usertimezone"
@@ -52,32 +51,29 @@ def parse_tag(token: Token, parser: Parser):
     return tag_name, args, kwargs
 
 
-
 class UTZNode(Node):
     """
-    Node to render the datetimes in template content 
+    Node to render the datetimes in template content
     in the preferred user's timezone.
     """
+
     def __init__(
-            self, 
-            nodelist: NodeList, 
-            args: List[FilterExpression], 
-            kwargs: Dict[str, FilterExpression], 
-            tag_name: str
-        ) -> None:
+        self,
+        nodelist: NodeList,
+        args: List[FilterExpression],
+        kwargs: Dict[str, FilterExpression],
+        tag_name: str,
+    ) -> None:
         self.nodelist = nodelist
         self.user = self.get_user(args, kwargs, tag_name)
         self.tag_name = tag_name
 
-
     @staticmethod
     def get_user(
-        args: List[FilterExpression], 
-        kwargs: Dict[str, FilterExpression], 
-        tag_name: str
+        args: List[FilterExpression], kwargs: Dict[str, FilterExpression], tag_name: str
     ) -> FilterExpression | None:
         """
-        Get the user object from the arguments and 
+        Get the user object from the arguments and
         keyword arguments passed to the utz template tag.
         """
         if args:
@@ -91,14 +87,18 @@ class UTZNode(Node):
             user = kwargs.get("user", None)
         return user
 
-
     def render(self, context) -> SafeText:
         request_user = context.get("request").user
         preferred_user = self.user.resolve(context) if self.user else None
         user = preferred_user if preferred_user else request_user
 
-        utz_meta = getattr(user, "UTZMeta", None)
-        user_model_is_decorated = utz_meta and utz_meta._decorated and issubclass(user.__class__, UserModelUTZMixin)
+        try:
+            user_model_is_decorated = get_user_model_config(
+                type(user), "_decorated", False
+            )
+        except AttributeError:
+            user_model_is_decorated = False
+
         if user.is_authenticated and user_model_is_decorated:
             tz = user.utz
             original_timezone = timezone.get_current_timezone()
@@ -113,15 +113,14 @@ class UTZNode(Node):
         return output
 
 
-
 @register.tag(name=_generic_name)
 def utz_tag(parser: Parser, token: Token) -> UTZNode:
     """
-    Template tag to render datetimes in the template content 
+    Template tag to render datetimes in the template content
     in the preferred user's timezone.
 
     #### In your template:
-    To render datetimes in the template content in the timezone 
+    To render datetimes in the template content in the timezone
     of the user object passed as an argument:
     ```
     {% load utz %}
@@ -144,9 +143,10 @@ def utz_tag(parser: Parser, token: Token) -> UTZNode:
     return UTZNode(nodelist, args, kwargs, tag_name)
 
 
-
 @register.filter(name=_generic_name)
-def utz_filter(value: datetime.datetime, user: UserModelUTZMixin = None) -> datetime.datetime | utzdatetime:
+def utz_filter(
+    value: datetime.datetime, user: Optional[UserModelUTZMixin] = None
+) -> datetime.datetime | utzdatetime:
     """
     Filter to convert a datetime object to the request/provided user's timezone.
 
@@ -164,11 +164,14 @@ def utz_filter(value: datetime.datetime, user: UserModelUTZMixin = None) -> date
     {{ datetime_object|usertimezone:user }}
     ```
     """
-    if not user: # If no user is provided, use the request user
+    if not user:  # If no user is provided, use the request user
         user = get_request_user()
-    
-    utz_meta = getattr(user, "UTZMeta", None)
-    is_decorated = utz_meta and utz_meta._decorated and issubclass(user.__class__, UserModelUTZMixin)
+
+    try:
+        is_decorated = get_user_model_config(type(user), "_decorated", False)
+    except AttributeError:
+        is_decorated = False
+
     # If the user model was not decorated with the `usermodel` decorator, return the value as is
     if not is_decorated:
         return value
@@ -176,4 +179,3 @@ def utz_filter(value: datetime.datetime, user: UserModelUTZMixin = None) -> date
         return user.to_local_timezone(value)
     except Exception:
         return value
-    

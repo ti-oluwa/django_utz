@@ -1,38 +1,36 @@
-"""Middleware that aims to make the current request user available globally in the application."""
-
 from django.utils.deprecation import MiddlewareMixin
 import threading
 from django.contrib.auth.models import AbstractUser, User, AbstractBaseUser
-from typing import TypeVar
+from typing import TypeVar, Optional
 
-ProjectUserModel = TypeVar("ProjectUserModel", AbstractUser, User, AbstractBaseUser)
+UserModel = TypeVar("UserModel", AbstractUser, User, AbstractBaseUser)
 
-local_thread_storage = threading.local()
+__local_thread_storage = threading.local()
+
+REQUEST_USER_KEY = "DJANGO_UTZ:REQUEST_USER"
 
 
 class DjangoUTZMiddleware(MiddlewareMixin):
-    
     def process_request(self, request) -> None:
         """Stores the current authenticated user in the local thread storage."""
         if request.user.is_authenticated:
-            setattr(local_thread_storage, "django_utz-request_user", request.user)
+            setattr(__local_thread_storage, REQUEST_USER_KEY, request.user)
         else:
-            setattr(local_thread_storage, "django_utz-request_user", None)
-        
+            setattr(__local_thread_storage, REQUEST_USER_KEY, None)
 
     def process_response(self, request, response):
         """
         Deletes the current authenticated user from the local thread storage.
         """
-        if hasattr(local_thread_storage, "django_utz-request_user"):
-            delattr(local_thread_storage, "django_utz-request_user")
+        if hasattr(__local_thread_storage, REQUEST_USER_KEY):
+            delattr(__local_thread_storage, REQUEST_USER_KEY)
         return response
 
 
-def get_request_user() -> ProjectUserModel | None:
+def get_request_user() -> Optional[UserModel]:
     """Returns the currently authenticated user. If no user is authenticated, returns None."""
-    if hasattr(local_thread_storage, "django_utz-request_user"):
-        request_user = getattr(local_thread_storage, "django_utz-request_user")
+    if hasattr(__local_thread_storage, REQUEST_USER_KEY):
+        request_user = getattr(__local_thread_storage, REQUEST_USER_KEY)
         if request_user is not None and request_user.is_authenticated:
-            return request_user     
+            return request_user
     return None
