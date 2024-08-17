@@ -3,7 +3,11 @@ from typing import Any, Dict, Optional, Set, TypeVar, Type, List
 import inspect
 import datetime
 
-from ..base import make_utz_config_getter, make_utz_config_setter, make_utz_config_validator_registrar
+from ..base import (
+    make_utz_config_getter,
+    make_utz_config_setter,
+    make_utz_config_validator_registrar,
+)
 from ..utils import ModelError
 from ..exceptions import ConfigurationError
 from ..serializer_fields import UTZDateTimeField
@@ -31,7 +35,6 @@ def get_serializer_fields(serializer_class: Type[DRFModelSerializer]) -> Set[str
 def get_serializer_model(serializer_class: Type[DRFModelSerializer]):
     """Returns the model of a model serializer class."""
     return serializer_class.Meta.model
-
 
 
 SERIALIZER_CLASS_CONFIGS = ("auto_add_fields", "datetime_format")

@@ -194,7 +194,7 @@ def get_user(model_instance: DjangoModel) -> Optional[AbstractBaseUser]:
 
     if is_user_model(instance_cls):
         return user
-    
+
     from .decorators.models import get_user_model_config
 
     if get_user_model_config(instance_cls, "use_related_user_timezone", False):
@@ -241,7 +241,7 @@ def find_user_field(model: Type[DjangoModel]) -> Optional[str]:
             field_paths.append(field.name)
             return ".".join(field_paths)
 
-        # If the user field was not found at surface level, 
+        # If the user field was not found at surface level,
         # check each field's related model (if any).
         for field in model._meta.fields:
             related_model = field.related_model

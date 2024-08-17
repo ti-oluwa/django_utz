@@ -75,7 +75,10 @@ def make_utz_config_validator_registrar(registry: Dict[str, Validator]):
 
     :param registry: The registry to register the validator in.
     """
-    def register_validator(validator: Validator, *, config: Optional[str] = None) -> None:
+
+    def register_validator(
+        validator: Validator, *, config: Optional[str] = None
+    ) -> None:
         """
         Register a configuration validator in the registry.
 
@@ -84,7 +87,7 @@ def make_utz_config_validator_registrar(registry: Dict[str, Validator]):
         """
         if config is None:
             config = validator.__name__.removeprefix("validate_")
-        
+
         registry[config] = validator
         return None
 

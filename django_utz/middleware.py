@@ -9,6 +9,7 @@ __local_thread_storage = threading.local()
 
 REQUEST_USER_KEY = "DJANGO_UTZ:REQUEST_USER"
 
+
 class DjangoUTZMiddleware(MiddlewareMixin):
     def process_request(self, request) -> None:
         """Stores the current authenticated user in the local thread storage."""

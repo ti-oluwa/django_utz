@@ -3,7 +3,11 @@ from typing import Any, Type, List, Optional, Callable
 from django.core.exceptions import FieldDoesNotExist
 from django.db import models
 
-from ..base import make_utz_config_getter, make_utz_config_setter, make_utz_config_validator_registrar
+from ..base import (
+    make_utz_config_getter,
+    make_utz_config_setter,
+    make_utz_config_validator_registrar,
+)
 from ..utils import is_datetime_field, validate_timezone, ModelError
 from ..datetime import utzdatetime
 from ..exceptions import ConfigurationError

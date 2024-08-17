@@ -10,7 +10,7 @@ from .exceptions import ConfigurationError
 
 class UTZDateTimeField(serializers.DateTimeField):
     """
-    `serializers.DateTimeField` that converts input datetime to 
+    `serializers.DateTimeField` that converts input datetime to
     server's timezone(settings.TIMEZONE) before storage
     and converts back to the preferred user's local timezone on output.
 
