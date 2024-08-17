@@ -22,6 +22,7 @@ def make_utz_config_getter(validators: Optional[Dict[str, Validator]] = None):
         """
         Get the value of a utz configuration from the class.
 
+        :param cls: The class to get the configuration from.
         :param config: The configuration to get.
         :param default: The default value to return if the configuration is not set.
         :return: The value of the configuration or `default`.
@@ -50,6 +51,7 @@ def make_utz_config_setter(
         """
         Sets a configuration's value on the class.
 
+        :param cls: The class to set the configuration on.
         :param attr: The configuration to set.
         :param value: The value to set.
         """
@@ -65,3 +67,25 @@ def make_utz_config_setter(
         return None
 
     return setter
+
+
+def make_utz_config_validator_registrar(registry: Dict[str, Validator]):
+    """
+    Create a function for registering a configuration validator in the registry.
+
+    :param registry: The registry to register the validator in.
+    """
+    def register_validator(validator: Validator, *, config: Optional[str] = None) -> None:
+        """
+        Register a configuration validator in the registry.
+
+        :param validator: The validator to register.
+        :param config: The configuration to register the validator for.
+        """
+        if config is None:
+            config = validator.__name__.removeprefix("validate_")
+        
+        registry[config] = validator
+        return None
+
+    return register_validator

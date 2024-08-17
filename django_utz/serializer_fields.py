@@ -10,13 +10,9 @@ from .exceptions import ConfigurationError
 
 class UTZDateTimeField(serializers.DateTimeField):
     """
-    Custom `serializers.DateTimeField` that converts input datetime to server's timezone(settings.TIMEZONE) before storage
+    `serializers.DateTimeField` that converts input datetime to 
+    server's timezone(settings.TIMEZONE) before storage
     and converts back to the preferred user's local timezone on output.
-
-    However, the model of the serializer in which this field is used must be decorated with a `ModelDecorator`.
-
-    This field is usually added automatically to the model serializer if it is dedorated with a `ModelSerializerDecorator`.
-    This can also work as a standalone field in a serializer without the decorator.
 
     if settings.USE_TZ is False, server's timezone is assumed to be UTC
 

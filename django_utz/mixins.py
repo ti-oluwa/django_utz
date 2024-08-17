@@ -16,7 +16,7 @@ DateTime = TypeVar("DateTime", bound=datetime.datetime)
 
 
 class UserModelUTZMixin:
-    """Adds necessary utz methods and properties to a User Model"""
+    """Adds necessary utz methods and properties to a user model"""
 
     @property
     def utz(self):

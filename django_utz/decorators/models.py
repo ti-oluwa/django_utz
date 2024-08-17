@@ -1,9 +1,9 @@
 import inspect
-from typing import Any, Type, TypeVar, List, Optional, Callable
+from typing import Any, Type, List, Optional, Callable
 from django.core.exceptions import FieldDoesNotExist
 from django.db import models
 
-from ..base import make_utz_config_getter, make_utz_config_setter
+from ..base import make_utz_config_getter, make_utz_config_setter, make_utz_config_validator_registrar
 from ..utils import is_datetime_field, validate_timezone, ModelError
 from ..datetime import utzdatetime
 from ..exceptions import ConfigurationError
@@ -16,9 +16,6 @@ from ..utils import (
     UserModel,
 )
 from ..mixins import UserModelUTZMixin
-
-
-UTZUserModel = TypeVar("UTZUserModel", bound=Type[UserModelUTZMixin])
 
 
 def check_model(
@@ -51,21 +48,24 @@ def check_model(
 # USER MODEL #
 ##############
 
-
-def validate_timezone_field(value: Any) -> None:
-    if not isinstance(value, str):
-        raise ConfigurationError("Value for 'timezone_field' should be of type str")
-    return None
-
-
 USER_MODEL_CONFIGS = ("timezone_field",)
 REQUIRED_USER_MODEL_CONFIGS = USER_MODEL_CONFIGS
-USER_MODEL_CONFIG_VALIDATORS = {"timezone_field": validate_timezone_field}
+USER_MODEL_CONFIG_VALIDATORS = {}
 
 get_user_model_config = make_utz_config_getter(USER_MODEL_CONFIG_VALIDATORS)
 set_user_model_config = make_utz_config_setter(
     USER_MODEL_CONFIGS, USER_MODEL_CONFIG_VALIDATORS
 )
+user_model_config_validator = make_utz_config_validator_registrar(
+    USER_MODEL_CONFIG_VALIDATORS
+)
+
+
+@user_model_config_validator
+def validate_timezone_field(value: Any) -> None:
+    if not isinstance(value, str):
+        raise ConfigurationError("Value for 'timezone_field' should be of type str")
+    return None
 
 
 def check_user_model(user_model: Type[UserModel]) -> Type[UserModel]:
@@ -128,32 +128,11 @@ def usermodel(user_model: Type[UserModel]) -> Type[UserModel]:
     return prepared_user_model_class
 
 
-#################
-# GENERAL MODEL #
-#################
+#########
+# MODEL #
+#########
 
 DEFAULT_ATTRIBUTE_SUFFIX = "utz"
-
-
-def validate_datetime_fields(value: Any) -> None:
-    if value != "__all__" and not isinstance(value, (list, tuple)):
-        raise ConfigurationError(
-            "'datetime_fields' should be a list, tuple or '__all__'"
-        )
-    return None
-
-
-def validate_attribute_suffix(value: Any) -> None:
-    if not isinstance(value, str):
-        raise ConfigurationError("'attribute_suffix' should be of type str")
-    return None
-
-
-def validate_use_related_user_timezone(value: Any) -> None:
-    if not isinstance(value, bool):
-        raise ConfigurationError("'use_related_user_timezone' should be of type bool")
-    return None
-
 
 MODEL_CONFIGS = (
     "datetime_fields",
@@ -162,15 +141,41 @@ MODEL_CONFIGS = (
     "related_user",
 )
 REQUIRED_MODEL_CONFIGS = ("datetime_fields",)
-MODEL_CONFIG_VALIDATORS = {
-    "datetime_fields": validate_datetime_fields,
-    "attribute_suffix": validate_attribute_suffix,
-    "use_related_user_timezone": validate_use_related_user_timezone,
-    "related_user": ...,
-}
+MODEL_CONFIG_VALIDATORS = {}
 
 get_model_config = make_utz_config_getter(MODEL_CONFIG_VALIDATORS)
 set_model_config = make_utz_config_setter(MODEL_CONFIGS, MODEL_CONFIG_VALIDATORS)
+model_config_validator = make_utz_config_validator_registrar(MODEL_CONFIG_VALIDATORS)
+
+
+@model_config_validator
+def validate_datetime_fields(value: Any) -> None:
+    if value != "__all__" and not isinstance(value, (list, tuple)):
+        raise ConfigurationError(
+            "'datetime_fields' should be a list, tuple or '__all__'"
+        )
+    return None
+
+
+@model_config_validator
+def validate_attribute_suffix(value: Any) -> None:
+    if not isinstance(value, str):
+        raise ConfigurationError("'attribute_suffix' should be of type str")
+    return None
+
+
+@model_config_validator
+def validate_use_related_user_timezone(value: Any) -> None:
+    if not isinstance(value, bool):
+        raise ConfigurationError("'use_related_user_timezone' should be of type bool")
+    return None
+
+
+@model_config_validator
+def validate_related_user(value: Any) -> None:
+    if not isinstance(value, str):
+        raise ConfigurationError("'related_user' should be of type str")
+    return None
 
 
 def prepare_model(model: Type[DjangoModel]) -> Type[DjangoModel]:

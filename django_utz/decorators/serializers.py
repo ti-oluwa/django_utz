@@ -3,7 +3,7 @@ from typing import Any, Dict, Optional, Set, TypeVar, Type, List
 import inspect
 import datetime
 
-from ..base import make_utz_config_getter, make_utz_config_setter
+from ..base import make_utz_config_getter, make_utz_config_setter, make_utz_config_validator_registrar
 from ..utils import ModelError
 from ..exceptions import ConfigurationError
 from ..serializer_fields import UTZDateTimeField
@@ -29,15 +29,32 @@ def get_serializer_fields(serializer_class: Type[DRFModelSerializer]) -> Set[str
 
 
 def get_serializer_model(serializer_class: Type[DRFModelSerializer]):
+    """Returns the model of a model serializer class."""
     return serializer_class.Meta.model
 
 
+
+SERIALIZER_CLASS_CONFIGS = ("auto_add_fields", "datetime_format")
+REQUIRED_SERIALIZER_CLASS_CONFIGS = ("auto_add_fields",)
+SERIALIZER_CLASS_CONFIG_VALIDATORS = {}
+
+get_serializer_class_config = make_utz_config_getter(SERIALIZER_CLASS_CONFIG_VALIDATORS)
+set_serializer_class_config = make_utz_config_setter(
+    SERIALIZER_CLASS_CONFIGS, SERIALIZER_CLASS_CONFIG_VALIDATORS
+)
+serializer_class_config_validator = make_utz_config_validator_registrar(
+    SERIALIZER_CLASS_CONFIG_VALIDATORS
+)
+
+
+@serializer_class_config_validator
 def validate_auto_add_fields(value: Any) -> None:
     if not isinstance(value, bool):
         raise ConfigurationError("auto_add_fields must be a boolean")
     return None
 
 
+@serializer_class_config_validator
 def validate_datetime_format(value: Any) -> None:
     if not isinstance(value, str):
         raise ConfigurationError("datetime_format must be a string")
@@ -49,19 +66,6 @@ def validate_datetime_format(value: Any) -> None:
     return None
 
 
-SERIALIZER_CONFIGS = ("auto_add_fields", "datetime_format")
-REQUIRED_SERIALIZER_CONFIGS = ("auto_add_fields",)
-SERIALIZER_CONFIG_VALIDATORS = {
-    "auto_add_fields": validate_auto_add_fields,
-    "datetime_format": validate_datetime_format,
-}
-
-get_serializer_config = make_utz_config_getter(SERIALIZER_CONFIG_VALIDATORS)
-set_serializer_config = make_utz_config_setter(
-    SERIALIZER_CONFIGS, SERIALIZER_CONFIG_VALIDATORS
-)
-
-
 def check_serializer_class(
     serializer_class: Type[DRFModelSerializer],
     required_configs: Optional[List[str]] = None,
@@ -69,8 +73,9 @@ def check_serializer_class(
     """
     Check if the model serializer class is properly setup.
 
-    :param serializer: The model serializer to check.
-    :return: The model serializer if properly setup.
+    :param serializer_class: The model serializer class to check.
+    :param required_configs: A list of required configurations that must be set in the model serializer's UTZMeta class.
+    :return: The model serializer class if it is valid.
     """
     if not issubclass(serializer_class, serializers.ModelSerializer):
         raise TypeError(
@@ -106,10 +111,7 @@ def prepare_serializer_class(
     serializer_class: Type[DRFModelSerializer],
 ) -> Type[DRFModelSerializer]:
     """
-    Prepare the serializer class for use. This where you can customize the serializer class.
-
-    Here, user timezone aware datetime fields are automatically added to the serializer class.
-    If `auto_add_fields` is set as True.
+    Prepare the serializer class for use. Makes necessary modifications to the serializer class.
     """
     datetime_fields = get_serializer_model(serializer_class).UTZMeta.datetime_fields
     serializer_fields = get_serializer_fields(serializer_class)
@@ -118,7 +120,7 @@ def prepare_serializer_class(
     if not serializer_fields:
         return serializer_class
 
-    if get_serializer_config(serializer_class, "auto_add_fields"):
+    if get_serializer_class_config(serializer_class, "auto_add_fields", False):
         for fieldname in datetime_fields:
             # Skip fields that are not included in the serializer
             if fieldname not in serializer_fields:
@@ -143,9 +145,13 @@ def get_utzdatetime_field(
 ) -> UTZDateTimeField:
     """
     Returns a `UTZDateTimeField`
+
+    :param serializer_class: The model serializer class.
+    :param extra_kwargs: Extra keyword arguments to pass to the `UTZDateTimeField` constructor.
+    :return: A `UTZDateTimeField` instance.
     """
     extra_kwargs = extra_kwargs or {}
-    datetime_format = get_serializer_config(serializer_class, "datetime_format")
+    datetime_format = get_serializer_class_config(serializer_class, "datetime_format")
 
     if datetime_format and "format" not in extra_kwargs:
         extra_kwargs.update({"format": datetime_format})
@@ -187,7 +193,7 @@ def modelserializer(
             datetime_format = "%Y-%m-%d %H:%M:%S"
     ```
     """
-    check_serializer_class(serializer_class, REQUIRED_SERIALIZER_CONFIGS)
+    check_serializer_class(serializer_class, REQUIRED_SERIALIZER_CLASS_CONFIGS)
     prepared_serializer_class = prepare_serializer_class(serializer_class)
     prepared_serializer_class.UTZMeta._decorated = True
     return prepared_serializer_class

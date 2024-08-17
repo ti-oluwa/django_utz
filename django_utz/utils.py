@@ -178,49 +178,44 @@ class ModelError(UTZError):
 
 def get_user(model_instance: DjangoModel) -> Optional[AbstractBaseUser]:
     """
-    Gets and returns the user object whose timezone is to be used by the model instance.
+    Gets and returns the user whose timezone is to be used by the model instance.
 
     If  the `use_related_user_timezone` config is True and `related_user` is not set, the first
-    user object found that is related to the model instance is returned.
+    user found that is related to the model instance is returned.
 
-    If the user has still not been found, the request user is returned.
+    If no related user is found, the request user is returned.
 
-    :param model_instance: The model instance for which a user object is to be found.
-    :return: The user object.
-    :raises ModelError: If the user's model is not decorated with a `ModelDecorator`.
+    :param model_instance: The model instance for which a related user is to be found.
+    :return: The user whose timezone is to be used by the model instance.
     """
     # Initially, assume that the object passed is a user object.
     user = model_instance
-    model_obj_cls = type(model_instance)
+    instance_cls = type(model_instance)
 
-    if not is_user_model(model_obj_cls):
-        if model_obj_cls.UTZMeta.use_related_user_timezone:
-            # Get the user object as specified by the `related_user` config
-            # or by finding the user field in the model and its related models
-            related_user = getattr(
-                model_obj_cls.UTZMeta, "related_user", None
-            ) or find_user_field(model_obj_cls)
-            if not related_user:
-                if getattr(model_obj_cls.UTZMeta, "related_user", None):
-                    raise ConfigurationError(
-                        f"Make sure to set the `related_user` config to the name or traversal path of the user field in {model_obj_cls.__name__}."
-                    )
-                raise ModelError(
-                    f"No relation to the User model was found in {model_obj_cls.__name__}"
+    if is_user_model(instance_cls):
+        return user
+    
+    from .decorators.models import get_user_model_config
+
+    if get_user_model_config(instance_cls, "use_related_user_timezone", False):
+        # Get the user object as specified by the `related_user` config
+        # or by finding the user field in the model and its related models
+        related_user = get_user_model_config(
+            instance_cls, "related_user"
+        ) or find_user_field(instance_cls)
+
+        if not related_user:
+            if get_user_model_config(instance_cls, "related_user"):
+                raise ConfigurationError(
+                    f"Make sure to set the `related_user` config to the name or traversal path of the user field in {instance_cls.__name__}."
                 )
-
-            user = get_attr_by_traversal(model_instance, related_user)
-        else:
-            user = get_request_user()
-
-    if user:
-        user_model_is_decorated = getattr(user.__class__, "UTZMeta", None) and getattr(
-            user.__class__.UTZMeta, "_decorated", False
-        )
-        if not user_model_is_decorated:
             raise ModelError(
-                f"Model '{user.__class__.__name__}', has not been decorated with a `ModelDecorator`"
+                f"No relation to the User model was found in {instance_cls.__name__}"
             )
+
+        user = get_attr_by_traversal(model_instance, related_user)
+    else:
+        user = get_request_user()
     return user
 
 
@@ -246,7 +241,8 @@ def find_user_field(model: Type[DjangoModel]) -> Optional[str]:
             field_paths.append(field.name)
             return ".".join(field_paths)
 
-        # If the user field was not found at surface level, check each field's related model (if any).
+        # If the user field was not found at surface level, 
+        # check each field's related model (if any).
         for field in model._meta.fields:
             related_model = field.related_model
             if related_model and isinstance(
