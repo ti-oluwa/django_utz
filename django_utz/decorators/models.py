@@ -3,7 +3,7 @@ from typing import Any, Type, List, Optional, Callable
 from django.core.exceptions import FieldDoesNotExist
 from django.db import models
 
-from ..base import (
+from ..config_factories import (
     make_utz_config_getter,
     make_utz_config_setter,
     make_utz_config_validator_registrar,
@@ -65,7 +65,7 @@ user_model_config_validator = make_utz_config_validator_registrar(
 )
 
 
-@user_model_config_validator
+@user_model_config_validator(config="timezone_field")
 def validate_timezone_field(value: Any) -> None:
     if not isinstance(value, str):
         raise ConfigurationError("Value for 'timezone_field' should be of type str")
@@ -152,7 +152,7 @@ set_model_config = make_utz_config_setter(MODEL_CONFIGS, MODEL_CONFIG_VALIDATORS
 model_config_validator = make_utz_config_validator_registrar(MODEL_CONFIG_VALIDATORS)
 
 
-@model_config_validator
+@model_config_validator(config="datetime_fields")
 def validate_datetime_fields(value: Any) -> None:
     if value != "__all__" and not isinstance(value, (list, tuple)):
         raise ConfigurationError(
@@ -161,21 +161,21 @@ def validate_datetime_fields(value: Any) -> None:
     return None
 
 
-@model_config_validator
+@model_config_validator(config="attribute_suffix")
 def validate_attribute_suffix(value: Any) -> None:
     if not isinstance(value, str):
         raise ConfigurationError("'attribute_suffix' should be of type str")
     return None
 
 
-@model_config_validator
+@model_config_validator(config="use_related_user_timezone")
 def validate_use_related_user_timezone(value: Any) -> None:
     if not isinstance(value, bool):
         raise ConfigurationError("'use_related_user_timezone' should be of type bool")
     return None
 
 
-@model_config_validator
+@model_config_validator(config="related_user")
 def validate_related_user(value: Any) -> None:
     if not isinstance(value, str):
         raise ConfigurationError("'related_user' should be of type str")

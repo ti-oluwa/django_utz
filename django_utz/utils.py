@@ -7,8 +7,8 @@ import pytz
 import datetime
 from django.db import models
 from django.core.exceptions import ValidationError
-from django.conf import settings
 from django.contrib.auth.models import AbstractBaseUser
+from django.contrib.auth import get_user_model
 
 from .middleware import get_request_user
 from .exceptions import ConfigurationError, UTZError
@@ -131,23 +131,9 @@ def is_date_field(model: Type[DjangoModel], field_name: str) -> bool:
     return issubclass(type(field), models.DateField)
 
 
-def get_model_traversal_path(model: Type[DjangoModel]) -> str:
-    """Returns the traversal path to the model."""
-    return f"{model.__module__}.{model.__name__}"
-
-
-def get_project_user_model() -> str:
-    """Returns the traversal path to the project's user model."""
-    auth_user_model: str = settings.AUTH_USER_MODEL
-    split = auth_user_model.split(".", maxsplit=1)
-    split.insert(1, "models")
-    user_model_path = ".".join(split)
-    return user_model_path
-
-
 def is_user_model(model: Type[DjangoModel]) -> bool:
     """Check if the model is the project's user model."""
-    return get_project_user_model() == get_model_traversal_path(model)
+    return model == get_user_model()
 
 
 class FunctionAttribute:

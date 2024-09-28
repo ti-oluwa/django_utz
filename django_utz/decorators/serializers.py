@@ -3,7 +3,7 @@ from typing import Any, Dict, Optional, Set, TypeVar, Type, List
 import inspect
 import datetime
 
-from ..base import (
+from ..config_factories import (
     make_utz_config_getter,
     make_utz_config_setter,
     make_utz_config_validator_registrar,
@@ -16,9 +16,14 @@ from .models import get_model_config
 DRFModelSerializer = TypeVar("DRFModelSerializer", bound=serializers.ModelSerializer)
 
 
+def get_serializer_model(serializer_class: Type[DRFModelSerializer]):
+    """Returns the model of a model serializer class."""
+    return serializer_class.Meta.model
+
+
 def get_serializer_fields(serializer_class: Type[DRFModelSerializer]) -> Set[str]:
     """Returns the fields of a model serializer class."""
-    model = serializer_class.Meta.model
+    model = get_serializer_model(serializer_class)
     all_fields = set(field.name for field in model._meta.get_serializer_fields())
 
     if hasattr(serializer_class.Meta, "fields"):
@@ -30,11 +35,6 @@ def get_serializer_fields(serializer_class: Type[DRFModelSerializer]) -> Set[str
         exclude = set(serializer_class.Meta.exclude)
         field_names = field_names - exclude
     return field_names
-
-
-def get_serializer_model(serializer_class: Type[DRFModelSerializer]):
-    """Returns the model of a model serializer class."""
-    return serializer_class.Meta.model
 
 
 SERIALIZER_CLASS_CONFIGS = ("auto_add_fields", "datetime_format")
@@ -50,14 +50,14 @@ serializer_class_config_validator = make_utz_config_validator_registrar(
 )
 
 
-@serializer_class_config_validator
+@serializer_class_config_validator(config="auto_add_fields")
 def validate_auto_add_fields(value: Any) -> None:
     if not isinstance(value, bool):
         raise ConfigurationError("auto_add_fields must be a boolean")
     return None
 
 
-@serializer_class_config_validator
+@serializer_class_config_validator(config="datetime_format")
 def validate_datetime_format(value: Any) -> None:
     if not isinstance(value, str):
         raise ConfigurationError("datetime_format must be a string")
@@ -193,7 +193,7 @@ def modelserializer(
 
         class UTZMeta:
             auto_add_fields = True
-            datetime_format = "%Y-%m-%d %H:%M:%S"
+            datetime_format = "%Y-%m-%dT%H:%M:%S%z"
     ```
     """
     check_serializer_class(serializer_class, REQUIRED_SERIALIZER_CLASS_CONFIGS)
