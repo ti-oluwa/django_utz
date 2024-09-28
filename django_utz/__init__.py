@@ -5,7 +5,7 @@ Decorators for Django models and DRF model serializers, custom serializer fields
 template tags and filters that aid easy conversion of timezone aware fields to a user's timezone.
 """
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 __author__ = "Daniel T. Afolayan"
 
 alias = "django-user-timezone"

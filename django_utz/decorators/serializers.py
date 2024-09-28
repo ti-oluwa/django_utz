@@ -24,11 +24,11 @@ def get_serializer_model(serializer_class: Type[DRFModelSerializer]):
 def get_serializer_fields(serializer_class: Type[DRFModelSerializer]) -> Set[str]:
     """Returns the fields of a model serializer class."""
     model = get_serializer_model(serializer_class)
-    all_fields = set(field.name for field in model._meta.get_serializer_fields())
 
     if hasattr(serializer_class.Meta, "fields"):
         field_names = set(serializer_class.Meta.fields)
     else:
+        all_fields = set(field.name for field in model._meta.get_fields())
         field_names = all_fields
 
     if hasattr(serializer_class.Meta, "exclude"):
